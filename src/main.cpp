@@ -99,7 +99,7 @@ bool connect_to_time() {
   Serial.printf("Connection stablished with the time server (%s). Using "
                 "Amsterdam time.\n",
                 UTC.dateTime().c_str());
-  Serial.printf("  Amsterdam time tube format: %d:%d.\n", Amsterdam.hour(),
+  Serial.printf("  Amsterdam time tube format: %02d:%02d.\n", Amsterdam.hour(),
                 Amsterdam.minute());
 
   return true;
@@ -187,7 +187,7 @@ void loop() {
   ArduinoOTA.handle();
 
   if (minuteChanged()) {
-    Serial.printf("%d:%d\n", Amsterdam.hour(), Amsterdam.minute());
+    Serial.printf("%02d:%02d\n", Amsterdam.hour(), Amsterdam.minute());
     writeTime(Amsterdam.hour(), Amsterdam.minute());
   }
 }
