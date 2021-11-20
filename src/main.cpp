@@ -210,7 +210,7 @@ void powerDownTubes() {
     analogWrite(anodePWMPin, tubePWMLevel);
   }
 }
-Ticker powerDownTubesTimer(powerDownTubes, 200, 0, MILLIS);
+Ticker powerDownTubesTimer(powerDownTubes, 100, 0, MILLIS);
 
 void setup() {
 
