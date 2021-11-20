@@ -202,7 +202,7 @@ bool writeNumber(uint16_t number) {
 }
 
 void powerDownTubes() {
-  tubePWMLevel -= 5;
+  tubePWMLevel -= 1;
   if (tubePWMLevel <= 0) {
     tubePWMLevel = 0;
     digitalWrite(anodePWMPin, LOW);
@@ -210,7 +210,7 @@ void powerDownTubes() {
     analogWrite(anodePWMPin, tubePWMLevel);
   }
 }
-Ticker powerDownTubesTimer(powerDownTubes, 500, 0, MILLIS);
+Ticker powerDownTubesTimer(powerDownTubes, 200, 0, MILLIS);
 
 void setup() {
 
