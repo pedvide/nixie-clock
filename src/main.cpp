@@ -82,6 +82,7 @@ void setup_OTA() {
 bool connect_to_time() {
   Serial.println("Connecting to time server");
   setDebug(ezDebugLevel_t::INFO);
+  setServer("ntp.server.home");
 
   if (!Amsterdam.setCache(0)) {
     Amsterdam.setLocation("Europe/Berlin");
