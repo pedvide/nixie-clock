@@ -13,6 +13,7 @@ const char *hostname = "nixie-clock";
 
 //// Time
 Timezone Amsterdam;
+uint8_t lastMinute = 61; // sigil value
 
 const uint8_t latchPin = D3;
 const uint8_t clockPin = D1;
@@ -200,9 +201,11 @@ void loop() {
   // Deal with OTA
   ArduinoOTA.handle();
 
-  if (minuteChanged()) {
+  // Only change display if the time has changed
+  if (Amsterdam.minute() != lastMinute) {
     Serial.printf("%02d:%02d\n", Amsterdam.hour(), Amsterdam.minute());
     writeTime(Amsterdam.hour(), Amsterdam.minute());
+    lastMinute = Amsterdam.minute();
   }
 
   if ((Amsterdam.hour() >= 0) && (Amsterdam.hour() <= 8)) {
