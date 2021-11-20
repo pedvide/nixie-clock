@@ -134,6 +134,7 @@ bool connect_to_time() {
   return true;
 }
 
+#ifdef USE_TELNET_DEBUG
 void handleTelnet() {
   if (TelnetServer.hasClient()) {
     // client is connected
@@ -152,9 +153,11 @@ void handleTelnet() {
     while (TelnetClient.available()) {
       // Serial.write(TelnetClient.read());
       Serial.println("Debug information for the nixie-clock");
+      char command = TelnetClient.read();
     }
   }
 }
+#endif
 
 bool writeDigits(uint8_t digit1, uint8_t digit2, uint8_t digit3,
                  uint8_t digit4) {
