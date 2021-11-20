@@ -2,6 +2,7 @@
 #include <ArduinoOTA.h>
 #include <ESP8266WiFi.h>
 #include <ezTime.h>
+#include <Ticker.h>   
 
 #include "config.h"
 
@@ -18,6 +19,8 @@ const uint8_t clockPin = D1;
 const uint8_t dataPin = D2;
 const uint8_t hvEnablePin = D6;
 const uint8_t anodePWMPin = D0;
+
+int8_t tubePWMLevel = 127;
 
 void connect_to_wifi() {
   Serial.println("Connecting to WiFi");
@@ -149,6 +152,19 @@ bool writeNumber(uint16_t number) {
   return writeDigits(digit1, digit2, digit3, digit4);
 }
 
+void powerDownTubes() {
+  Serial.println(tubePWMLevel);
+  if (tubePWMLevel <= 0) {
+    tubePWMLevel = 0;
+    digitalWrite(anodePWMPin, LOW);
+  } else {
+    analogWrite(anodePWMPin, tubePWMLevel);
+    tubePWMLevel -= 5;
+  }
+
+}
+Ticker powerDownTubesTimer(powerDownTubes, 500, 0, MILLIS);
+
 void setup() {
 
   pinMode(LED_BUILTIN, OUTPUT);
@@ -173,7 +189,7 @@ void setup() {
   pinMode(anodePWMPin, OUTPUT);
   pinMode(hvEnablePin, OUTPUT);
   delay(20);
-  analogWrite(anodePWMPin, 127);
+  analogWrite(anodePWMPin, tubePWMLevel);
   digitalWrite(hvEnablePin, HIGH);
 
   digitalWrite(LED_BUILTIN, HIGH); // end of setup
@@ -190,4 +206,25 @@ void loop() {
     Serial.printf("%02d:%02d\n", Amsterdam.hour(), Amsterdam.minute());
     writeTime(Amsterdam.hour(), Amsterdam.minute());
   }
+
+  if ((Amsterdam.hour() >= 0) && (Amsterdam.hour() <= 8)) {
+    if ((powerDownTubesTimer.state() != RUNNING) && (tubePWMLevel > 0)) {
+      Serial.println("Powering down tubes for the night...");
+      powerDownTubesTimer.start();
+    }
+  } else {
+    if (tubePWMLevel == 0) {
+      Serial.println("Powering up tubes for the day.");
+      tubePWMLevel = 127;
+      digitalWrite(hvEnablePin, HIGH);
+      analogWrite(anodePWMPin, tubePWMLevel);
+    }
+  }
+
+  if ((tubePWMLevel == 0) && (powerDownTubesTimer.state() != STOPPED)) {
+    Serial.println("Tubes fully powered down.");
+    powerDownTubesTimer.stop();
+    digitalWrite(hvEnablePin, LOW);
+  }
+  powerDownTubesTimer.update();
 }
