@@ -267,6 +267,12 @@ void loop() {
       Serial.println("Powering down tubes for the night...");
       powerDownTubesTimer.start();
     }
+    if ((powerDownTubesTimer.state() != STOPPED) && (tubePWMLevel == 0)) {
+      Serial.println("Tubes fully powered down.");
+      powerDownTubesTimer.stop();
+      digitalWrite(hvEnablePin, LOW);
+    }
+    powerDownTubesTimer.update();
   } else {
     if (tubePWMLevel == 0) {
       Serial.println("Powering up tubes for the day.");
@@ -275,13 +281,6 @@ void loop() {
       analogWrite(anodePWMPin, tubePWMLevel);
     }
   }
-
-  if ((tubePWMLevel == 0) && (powerDownTubesTimer.state() != STOPPED)) {
-    Serial.println("Tubes fully powered down.");
-    powerDownTubesTimer.stop();
-    digitalWrite(hvEnablePin, LOW);
-  }
-  powerDownTubesTimer.update();
 
 #ifdef USE_TELNET_DEBUG
   handleTelnet();
