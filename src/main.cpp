@@ -15,6 +15,7 @@ const char *hostname = "nixie-clock";
 Timezone Amsterdam;
 uint8_t lastMinute = 61; // sigil value
 
+// Pins
 const uint8_t latchPin = D3;
 const uint8_t clockPin = D1;
 const uint8_t dataPin = D2;
@@ -22,6 +23,32 @@ const uint8_t hvEnablePin = D6;
 const uint8_t anodePWMPin = D0;
 
 int8_t tubePWMLevel = 127;
+
+#ifdef USE_TELNET_DEBUG
+///// Telnet
+// ansi stuff, could always use printf instead of concat
+String ansiPRE = "\033";      // escape code
+String ansiHOME = "\033[H";   // cursor home
+String ansiESC = "\033[2J";   // esc
+String ansiCLC = "\033[?25l"; // invisible cursor
+
+String ansiEND = "\033[0m"; // closing tag for styles
+String ansiBOLD = "\033[1m";
+
+String ansiRED = "\033[41m"; // red background
+String ansiGRN = "\033[42m"; // green background
+String ansiBLU = "\033[44m"; // blue background
+
+String ansiREDF = "\033[31m"; // red foreground
+String ansiGRNF = "\033[34m"; // green foreground
+String ansiBLUF = "\033[32m"; // blue foreground
+String BELL = "\a";
+
+// declare telnet server (do NOT put in setup())
+WiFiServer TelnetServer(23);
+WiFiClient TelnetClient;
+#define Serial TelnetClient
+#endif
 
 void connect_to_wifi() {
   Serial.println("Connecting to WiFi");
@@ -109,6 +136,27 @@ bool connect_to_time() {
   return true;
 }
 
+void handleTelnet() {
+  if (TelnetServer.hasClient()) {
+    // client is connected
+    if (!TelnetClient || !TelnetClient.connected()) {
+      if (TelnetClient) {
+        TelnetClient.stop(); // client disconnected
+      }
+      TelnetClient = TelnetServer.available(); // ready for new client
+    } else {
+      TelnetServer.available().stop(); // have client, block new conections
+    }
+  }
+
+  if (TelnetClient && TelnetClient.connected() && TelnetClient.available()) {
+    // client input processing
+    while (TelnetClient.available()) {
+      Serial.write(TelnetClient.read());
+    }
+  }
+}
+
 bool writeDigits(uint8_t digit1, uint8_t digit2, uint8_t digit3,
                  uint8_t digit4) {
   if ((digit1 > 9) | (digit2 > 9) | (digit3 > 9) | (digit4 > 9)) {
@@ -174,11 +222,17 @@ void setup() {
   pinMode(clockPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
 
+#ifndef USE_TELNET_DEBUG
   Serial.begin(115200);
+#endif
 
   connect_to_wifi();
 
   setup_OTA();
+
+#ifdef USE_TELNET_DEBUG
+  TelnetServer.begin();
+#endif
 
   connect_to_time();
 
@@ -228,4 +282,8 @@ void loop() {
     digitalWrite(hvEnablePin, LOW);
   }
   powerDownTubesTimer.update();
+
+#ifdef USE_TELNET_DEBUG
+  handleTelnet();
+#endif
 }
