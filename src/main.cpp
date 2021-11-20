@@ -179,6 +179,7 @@ bool writeTime(uint8_t hours, uint8_t minutes) {
   if ((hours > 23) | (minutes > 59)) {
     return false;
   }
+  Serial.printf("Time changed to %02d:%02d.\n", hours, minutes);
 
   uint8_t digit4 = minutes % 10;
   uint8_t digit3 = int(minutes / 10) % 10;
@@ -257,7 +258,6 @@ void loop() {
 
   // Only change display if the time has changed
   if (Amsterdam.minute() != lastMinute) {
-    Serial.printf("%02d:%02d\n", Amsterdam.hour(), Amsterdam.minute());
     writeTime(Amsterdam.hour(), Amsterdam.minute());
     lastMinute = Amsterdam.minute();
   }
