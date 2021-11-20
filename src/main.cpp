@@ -1,8 +1,8 @@
 #include <Arduino.h>
 #include <ArduinoOTA.h>
 #include <ESP8266WiFi.h>
+#include <Ticker.h>
 #include <ezTime.h>
-#include <Ticker.h>   
 
 #include "config.h"
 
@@ -153,15 +153,13 @@ bool writeNumber(uint16_t number) {
 }
 
 void powerDownTubes() {
-  Serial.println(tubePWMLevel);
+  tubePWMLevel -= 5;
   if (tubePWMLevel <= 0) {
     tubePWMLevel = 0;
     digitalWrite(anodePWMPin, LOW);
   } else {
     analogWrite(anodePWMPin, tubePWMLevel);
-    tubePWMLevel -= 5;
   }
-
 }
 Ticker powerDownTubesTimer(powerDownTubes, 500, 0, MILLIS);
 
