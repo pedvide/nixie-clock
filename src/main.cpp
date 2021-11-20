@@ -125,13 +125,11 @@ bool connect_to_time() {
   }
   setInterval(60 * 60); // 1h in seconds
 
-  Serial.println("  UTC: " + UTC.dateTime());
-  Serial.println("  Amsterdam time: " + Amsterdam.dateTime());
-  Serial.printf("Connection stablished with the time server (%s). Using "
+  Serial.printf("  Connection stablished with the time server (%s). Using "
                 "Amsterdam time.\n",
                 UTC.dateTime().c_str());
-  Serial.printf("  Amsterdam time tube format: %02d:%02d.\n", Amsterdam.hour(),
-                Amsterdam.minute());
+  Serial.println("  UTC: " + UTC.dateTime());
+  Serial.println("  Amsterdam time: " + Amsterdam.dateTime());
 
   return true;
 }
@@ -152,7 +150,8 @@ void handleTelnet() {
   if (TelnetClient && TelnetClient.connected() && TelnetClient.available()) {
     // client input processing
     while (TelnetClient.available()) {
-      Serial.write(TelnetClient.read());
+      // Serial.write(TelnetClient.read());
+      Serial.println("Debug information for the nixie-clock");
     }
   }
 }
