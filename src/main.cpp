@@ -246,6 +246,15 @@ bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
                             transitionTime_ms);
 }
 
+void powerUpTubes() {
+  tubePWMLevel++;
+  if (tubePWMLevel > averageTubeBrightness) {
+    tubePWMLevel = averageTubeBrightness;
+  }
+  setTubeBrightness(tubePWMLevel);
+}
+Ticker powerUpTubesTimer(powerUpTubes, 100, 127, MILLIS);
+
 void powerDownTubes() {
   tubePWMLevel--;
   if (tubePWMLevel < 0) {
