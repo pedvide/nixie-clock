@@ -255,6 +255,12 @@ void powerDownTubes() {
 }
 Ticker powerDownTubesTimer(powerDownTubes, 100, 255, MILLIS);
 
+void preventCathodePoisoning() {
+  setTubeBrightness(255);
+  transitionToNumber(random(9999), 100);
+}
+Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 120, 1000, MILLIS);
+
 #ifdef USE_TELNET_DEBUG
 void handleCommands() {
   if (commandServer.hasClient()) {
