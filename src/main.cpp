@@ -22,6 +22,10 @@ const uint8_t dataPin = D2;
 const uint8_t hvEnablePin = D6;
 const uint8_t anodePWMPin = D0;
 
+// Tube digits
+uint8_t currentDigit1, currentDigit2, currentDigit3, currentDigit4;
+
+// Brightness
 const uint8_t averageTubeBrightness = 127;
 int8_t tubePWMLevel = averageTubeBrightness;
 
@@ -196,6 +200,11 @@ bool writeDigits(uint8_t digit1, uint8_t digit2, uint8_t digit3,
 
   // take the latch pin high so the tubes will change
   digitalWrite(latchPin, HIGH);
+
+  currentDigit1 = digit1;
+  currentDigit2 = digit2;
+  currentDigit3 = digit3;
+  currentDigit4 = digit4;
 
   return true;
 }
