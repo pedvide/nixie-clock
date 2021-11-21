@@ -153,12 +153,17 @@ void handleTelnet() {
       String command = commandClient.readStringUntil('\n');
       // Serial.println(command);
       if (command == "hv on") {
+        Serial.println("Switching HV on.");
         switchHVOn();
       } else if (command == "hv off") {
+        Serial.println("Switching HV off.");
         switchHVOff();
-      } else if (command.startsWith("set brightness")) {
-        String parameter = command.substring(15);
-        int32_t new_brightness = parameter.toInt();
+      } else if (command.startsWith("set brightness") ||
+                 command.startsWith("set br")) {
+        command.replace("set brightness ", "");
+        command.replace("set br ", "");
+        command.trim();
+        int32_t new_brightness = command.toInt();
         if (new_brightness < 0) {
           new_brightness = 0;
         }
@@ -167,6 +172,10 @@ void handleTelnet() {
         }
         Serial.printf("New brightness: %d.\n", new_brightness);
         setTubeBrightness(new_brightness);
+      } else {
+        Serial.println("Command not recognized!");
+        Serial.println("Available commands: 'hv on', 'hv off', 'set "
+                       "(br)ightness <0-255>'");
       }
     }
   }
