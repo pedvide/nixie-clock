@@ -297,10 +297,9 @@ void handleCommands() {
       } else if (command == "hv off") {
         Serial.println("Switching HV off.");
         switchHVOff();
-      } else if (command.startsWith("set brightness") ||
-                 command.startsWith("set br")) {
-        command.replace("set brightness ", "");
-        command.replace("set br ", "");
+      } else if (command.startsWith("brightness") || command.startsWith("br")) {
+        command.replace("brightness ", "");
+        command.replace("br ", "");
         command.trim();
         int32_t new_brightness = command.toInt();
         if (new_brightness < 0) {
@@ -311,20 +310,31 @@ void handleCommands() {
         }
         Serial.printf("New brightness: %d.\n", new_brightness);
         setTubeBrightness(new_brightness);
-      } else if (command == "run cathodes") {
+      } else if (command == "time") {
+        transitionToTime(Amsterdam.hour(), Amsterdam.minute());
+      } else if (command == "random") {
         Serial.println("Running cathode poisoning prevention routine.");
         preventCathodePoisoningTimer.start();
+      } else if (command == "random stop") {
+        Serial.println("Stopping cathode poisoning prevention routine.");
+        preventCathodePoisoningTimer.stop();
+      } else if (command == "power up") {
+        Serial.println("Powering tubes up.");
+        powerUpTubesTimer.start();
       } else if (command == "power down") {
         Serial.println("Powering tubes down.");
         powerDownTubesTimer.start();
       } else if (command == "restart") {
         Serial.println("Restarting!");
+        Serial.flush();
+        delay(10);
         ESP.restart();
       } else {
         Serial.println("Command not recognized!");
         Serial.println("Available commands: 'hv on', 'hv off', "
-                       "'set (br)ightness <0-255>', 'run cathodes', 'power "
-                       "down', 'restart'.");
+                       "'(br)ightness <0-255>', 'time', "
+                       "'random', 'random stop', "
+                       "'power down', 'power up', 'restart'.");
       }
     }
   }
