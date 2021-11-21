@@ -138,7 +138,7 @@ bool connect_to_time() {
 }
 
 #ifdef USE_TELNET_DEBUG
-void handleTelnet() {
+void handleCommands() {
   if (commandServer.hasClient()) {
     // client is connected
     if (!commandClient || !commandClient.connected()) {
@@ -315,6 +315,6 @@ void loop() {
   }
 
 #ifdef USE_TELNET_DEBUG
-  handleTelnet();
+  handleCommands();
 #endif
 }
