@@ -83,6 +83,9 @@ void setup_OTA() {
   ArduinoOTA.onStart([]() {
     switchHVOff();
     Serial.println("Starting the OTA update.");
+#ifdef USE_TELNET_DEBUG
+    commandClient.stop();
+#endif
   });
 
   ArduinoOTA.onEnd([]() { Serial.println("Finished the OTA update."); });
@@ -90,7 +93,7 @@ void setup_OTA() {
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     static uint8_t last_perc_progress = 0;
     uint8_t perc_progress = (progress / (total / 100));
-    if (((perc_progress % 20) == 0) && (perc_progress > last_perc_progress)) {
+    if (((perc_progress % 10) == 0) && (perc_progress > last_perc_progress)) {
       digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
       Serial.printf("OTA progress: %u%%.\n", perc_progress);
       last_perc_progress = perc_progress;
