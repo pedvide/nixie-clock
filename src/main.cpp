@@ -265,10 +265,13 @@ void powerDownTubes() {
 Ticker powerDownTubesTimer(powerDownTubes, 100, 255, MILLIS);
 
 void preventCathodePoisoning() {
-  setTubeBrightness(255);
-  transitionToNumber(random(9999), 100);
+  // Wait for powe up to finish
+  if (powerUpTubesTimer.state() != RUNNING) {
+    setTubeBrightness(255);
+    transitionToNumber(random(9999), 200);
+  }
 }
-Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 120, 1000, MILLIS);
+Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 500, 1000, MILLIS);
 
 #ifdef USE_TELNET_DEBUG
 void handleCommands() {
@@ -370,29 +373,30 @@ void loop() {
   // Deal with OTA
   ArduinoOTA.handle();
 
-  // Run the cathode poisoning prevention routine at midnight
-  // and then switch tubes off for the night
-  if ((Amsterdam.hour() == 0) && (Amsterdam.minute() == 0)) {
-    if (powerDownTubesTimer.state() != RUNNING) {
+  // Switch tubes on for the day and
+  // run the cathode poisoning prevention routine
+  if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 0)) {
+    if (powerUpTubesTimer.state() != RUNNING) {
+      Serial.println("Powering up tubes for the night...");
+      powerUpTubesTimer.start();
+    }
+
+    if (preventCathodePoisoningTimer.state() != RUNNING) {
       Serial.println("Running cathode poisoning prevention routine.");
       preventCathodePoisoningTimer.start();
     }
+  }
+  powerUpTubesTimer.update();
+  preventCathodePoisoningTimer.update();
 
-    if (powerDownTubesTimer.state() == STOPPED) {
+  // Switch tubes off for the night at midnight
+  if ((Amsterdam.hour() == 0) && (Amsterdam.minute() == 0)) {
+    if (powerDownTubesTimer.state() != RUNNING) {
       Serial.println("Powering down tubes for the night...");
       powerDownTubesTimer.start();
     }
   }
-  preventCathodePoisoningTimer.update();
   powerDownTubesTimer.update();
-
-  // Switch tubes on for the day
-  if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 0)) {
-    if (getTubeBrightness() == 0) {
-      Serial.println("Powering up tubes for the day.");
-      setTubeBrightness(averageTubeBrightness);
-    }
-  }
 
   // Day tasks
   if (Amsterdam.hour() >= 8) {
