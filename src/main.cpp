@@ -169,7 +169,8 @@ bool writeTime(uint8_t hours, uint8_t minutes) {
   if ((hours > 23) | (minutes > 59)) {
     return false;
   }
-  Serial.printf("Time changed to %02d:%02d.\n", hours, minutes);
+  Serial.printf("\nTime changed to %02d:%02d.\n", hours, minutes);
+  Serial.print("> ");
 
   uint8_t digit4 = minutes % 10;
   uint8_t digit3 = int(minutes / 10) % 10;
@@ -238,7 +239,8 @@ bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
   if ((toHours > 23) | (toMinutes > 59)) {
     return false;
   }
-  Serial.printf("Time changed to %02d:%02d.\n", toHours, toMinutes);
+  Serial.printf("\nTime changed to %02d:%02d.\n", toHours, toMinutes);
+  Serial.print("> ");
 
   uint8_t toDigit4 = toMinutes % 10;
   uint8_t toDigit3 = int(toMinutes / 10) % 10;
@@ -296,9 +298,11 @@ void handleCommands() {
       // Serial.println(command);
       if (command == "hv on") {
         Serial.println("Switching HV on.");
+        Serial.print("> ");
         switchHVOn();
       } else if (command == "hv off") {
         Serial.println("Switching HV off.");
+        Serial.print("> ");
         switchHVOff();
       } else if (command.startsWith("brightness") || command.startsWith("br")) {
         command.replace("brightness ", "");
@@ -312,32 +316,40 @@ void handleCommands() {
           new_brightness = 255;
         }
         Serial.printf("New brightness: %d.\n", new_brightness);
+        Serial.print("> ");
         setTubeBrightness(new_brightness);
       } else if (command == "time") {
         transitionToTime(Amsterdam.hour(), Amsterdam.minute());
       } else if (command == "random") {
         Serial.println("Running cathode poisoning prevention routine.");
+        Serial.print("> ");
         preventCathodePoisoningTimer.start();
       } else if (command == "random stop") {
         Serial.println("Stopping cathode poisoning prevention routine.");
+        Serial.print("> ");
         preventCathodePoisoningTimer.stop();
       } else if (command == "power up") {
         Serial.println("Powering tubes up.");
+        Serial.print("> ");
         powerUpTubesTimer.start();
       } else if (command == "power down") {
         Serial.println("Powering tubes down.");
+        Serial.print("> ");
         powerDownTubesTimer.start();
       } else if (command == "restart") {
         Serial.println("Restarting!");
         Serial.flush();
         delay(10);
         ESP.restart();
+      } else if (command == "") {
+        Serial.print("> ");
       } else {
         Serial.println("Command not recognized!");
         Serial.println("Available commands: 'hv on', 'hv off', "
                        "'(br)ightness <0-255>', 'time', "
                        "'random', 'random stop', "
                        "'power down', 'power up', 'restart'.");
+        Serial.print("> ");
       }
     }
   }
@@ -395,11 +407,13 @@ void loop() {
   if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 0)) {
     if (powerUpTubesTimer.state() != RUNNING) {
       Serial.println("Powering up tubes for the night...");
+      Serial.print("> ");
       powerUpTubesTimer.start();
     }
 
     if (preventCathodePoisoningTimer.state() != RUNNING) {
       Serial.println("Running cathode poisoning prevention routine.");
+      Serial.print("> ");
       preventCathodePoisoningTimer.start();
     }
   }
@@ -410,6 +424,7 @@ void loop() {
   if ((Amsterdam.hour() == 0) && (Amsterdam.minute() == 0)) {
     if (powerDownTubesTimer.state() != RUNNING) {
       Serial.println("Powering down tubes for the night...");
+      Serial.print("> ");
       powerDownTubesTimer.start();
     }
   }
