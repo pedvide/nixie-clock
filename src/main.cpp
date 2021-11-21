@@ -321,7 +321,6 @@ void handleCommands() {
 #endif
 
 void setup() {
-
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, LOW); // LED pin is active low
 
@@ -362,29 +361,36 @@ void loop() {
   // Deal with OTA
   ArduinoOTA.handle();
 
-  // Only change display if the time has changed
-  if (Amsterdam.minute() != lastMinute) {
-    transitionToTime(Amsterdam.hour(), Amsterdam.minute());
-    lastMinute = Amsterdam.minute();
-  }
+  // Run the cathode poisoning prevention routine at midnight
+  // and then switch tubes off for the night
+  if ((Amsterdam.hour() == 0) && (Amsterdam.minute() == 0)) {
+    if (powerDownTubesTimer.state() != RUNNING) {
+      Serial.println("Running cathode poisoning prevention routine.");
+      preventCathodePoisoningTimer.start();
+    }
 
-  if ((Amsterdam.hour() >= 0) && (Amsterdam.hour() <= 8)) {
-    if ((powerDownTubesTimer.state() != RUNNING) && (getTubeBrightness() > 0)) {
+    if (powerDownTubesTimer.state() == STOPPED) {
       Serial.println("Powering down tubes for the night...");
       powerDownTubesTimer.start();
     }
-    if ((powerDownTubesTimer.state() != STOPPED) &&
-        (getTubeBrightness() == 0)) {
-      Serial.println("Tubes fully powered down.");
-      powerDownTubesTimer.stop();
-      switchHVOff();
-    }
-    powerDownTubesTimer.update();
-  } else {
+  }
+  preventCathodePoisoningTimer.update();
+  powerDownTubesTimer.update();
+
+  // Switch tubes on for the day
+  if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 0)) {
     if (getTubeBrightness() == 0) {
       Serial.println("Powering up tubes for the day.");
-      switchHVOn();
       setTubeBrightness(averageTubeBrightness);
+    }
+  }
+
+  // Day tasks
+  if (Amsterdam.hour() >= 8) {
+    // Only change display if the time has changed
+    if (Amsterdam.minute() != lastMinute) {
+      transitionToTime(Amsterdam.hour(), Amsterdam.minute());
+      lastMinute = Amsterdam.minute();
     }
   }
 
