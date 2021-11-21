@@ -352,6 +352,7 @@ void handleCommands() {
         Serial.println("Restarting!");
         Serial.flush();
         delay(10);
+        commandClient.stop();
         ESP.restart();
       } else if (command == "") {
         Serial.print("> ");
