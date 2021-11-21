@@ -367,11 +367,16 @@ void setup() {
 }
 
 void loop() {
-  // Update time if needed
+  // Update time library events
   events();
 
   // Deal with OTA
   ArduinoOTA.handle();
+
+  // Handle user commands
+#ifdef USE_TELNET_DEBUG
+  handleCommands();
+#endif
 
   // Switch tubes on for the day and
   // run the cathode poisoning prevention routine
@@ -406,8 +411,4 @@ void loop() {
       lastMinute = Amsterdam.minute();
     }
   }
-
-#ifdef USE_TELNET_DEBUG
-  handleCommands();
-#endif
 }
