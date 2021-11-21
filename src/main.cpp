@@ -239,7 +239,7 @@ bool writeNumber(uint16_t number) {
 }
 
 bool transitionToDigits(uint8_t toDigit1, uint8_t toDigit2, uint8_t toDigit3,
-                        uint8_t toDigit4, uint8_t maxIterations = 100) {
+                        uint8_t toDigit4, uint16_t transitionTime_ms = 1000) {
   if ((toDigit1 > 9) | (toDigit2 > 9) | (toDigit3 > 9) | (toDigit4 > 9)) {
     return false;
   }
@@ -250,6 +250,7 @@ bool transitionToDigits(uint8_t toDigit1, uint8_t toDigit2, uint8_t toDigit3,
   const uint8_t fromDigit4 = currentDigit4;
 
   const uint8_t currentTubeBrightness = getTubeBrightness();
+  const uint8_t maxIterations = transitionTime_ms / 10;
   for (uint32_t i = 0; i < maxIterations; i++) {
     writeDigits(fromDigit1, fromDigit2, fromDigit3, fromDigit4);
     setTubeBrightness(map(maxIterations - i, 0, maxIterations, 1,
@@ -264,7 +265,7 @@ bool transitionToDigits(uint8_t toDigit1, uint8_t toDigit2, uint8_t toDigit3,
   return writeDigits(toDigit1, toDigit2, toDigit3, toDigit4);
 }
 
-bool transitionToNumber(uint16_t toNumber, uint8_t maxIterations = 100) {
+bool transitionToNumber(uint16_t toNumber, uint16_t transitionTime_ms = 1000) {
   if (toNumber > 9999) {
     return false;
   }
@@ -275,11 +276,11 @@ bool transitionToNumber(uint16_t toNumber, uint8_t maxIterations = 100) {
   uint8_t toDigit1 = int(toNumber / 1000) % 10;
 
   return transitionToDigits(toDigit1, toDigit2, toDigit3, toDigit4,
-                            maxIterations);
+                            transitionTime_ms);
 }
 
 bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
-                      uint8_t maxIterations = 100) {
+                      uint16_t transitionTime_ms = 1000) {
   if ((toHours > 23) | (toMinutes > 59)) {
     return false;
   }
@@ -291,7 +292,7 @@ bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
   uint8_t toDigit1 = int(toHours / 10) % 10;
 
   return transitionToDigits(toDigit1, toDigit2, toDigit3, toDigit4,
-                            maxIterations);
+                            transitionTime_ms);
 }
 
 void powerDownTubes() {
