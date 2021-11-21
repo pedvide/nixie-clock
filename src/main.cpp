@@ -272,10 +272,12 @@ Ticker powerDownTubesTimer(powerDownTubes, 100, 255, MILLIS);
 void preventCathodePoisoning() {
   // Wait for power up to finish
   if (powerUpTubesTimer.state() != RUNNING) {
-    transitionToNumber(random(9999), 200);
+    // transitionToNumber(random(9999), 350);
+    transitionToDigits((currentDigit1 + 1) % 10, (currentDigit2 + 1) % 10,
+                       (currentDigit3 + 1) % 10, (currentDigit4 + 1) % 10, 400);
   }
 }
-Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 250, 2000, MILLIS);
+Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 500, 2000, MILLIS);
 
 #ifdef USE_TELNET_DEBUG
 bool justConnected = true;
