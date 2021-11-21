@@ -27,25 +27,6 @@ int8_t tubePWMLevel = averageTubeBrightness;
 
 #ifdef USE_TELNET_DEBUG
 ///// Telnet
-// ansi stuff, could always use printf instead of concat
-String ansiPRE = "\033";      // escape code
-String ansiHOME = "\033[H";   // cursor home
-String ansiESC = "\033[2J";   // esc
-String ansiCLC = "\033[?25l"; // invisible cursor
-
-String ansiEND = "\033[0m"; // closing tag for styles
-String ansiBOLD = "\033[1m";
-
-String ansiRED = "\033[41m"; // red background
-String ansiGRN = "\033[42m"; // green background
-String ansiBLU = "\033[44m"; // blue background
-
-String ansiREDF = "\033[31m"; // red foreground
-String ansiGRNF = "\033[34m"; // green foreground
-String ansiBLUF = "\033[32m"; // blue foreground
-String BELL = "\a";
-
-// declare telnet server (do NOT put in setup())
 WiFiServer TelnetServer(23);
 WiFiClient TelnetClient;
 #define Serial TelnetClient
@@ -169,9 +150,24 @@ void handleTelnet() {
   if (TelnetClient && TelnetClient.connected() && TelnetClient.available()) {
     // client input processing
     while (TelnetClient.available()) {
-      // Serial.write(TelnetClient.read());
-      Serial.println("Debug information for the nixie-clock");
-      char command = TelnetClient.read();
+      String command = TelnetClient.readStringUntil('\n');
+      // Serial.println(command);
+      if (command == "hv on") {
+        switchHVOn();
+      } else if (command == "hv off") {
+        switchHVOff();
+      } else if (command.startsWith("set brightness")) {
+        String parameter = command.substring(15);
+        int32_t new_brightness = parameter.toInt();
+        if (new_brightness < 0) {
+          new_brightness = 0;
+        }
+        if (new_brightness > 255) {
+          new_brightness = 255;
+        }
+        Serial.printf("New brightness: %d.\n", new_brightness);
+        setTubeBrightness(new_brightness);
+      }
     }
   }
 }
