@@ -44,8 +44,10 @@ void setTubeBrightness(uint8_t brightness) {
   if (brightness == 0) {
     digitalWrite(anodePWMPin, LOW);
   } else if (brightness == 255) {
+    switchHVOn();
     digitalWrite(anodePWMPin, HIGH);
   } else {
+    switchHVOn();
     analogWrite(anodePWMPin, brightness);
   }
   tubePWMLevel = brightness;
@@ -332,7 +334,6 @@ void setup() {
   pinMode(hvEnablePin, OUTPUT);
   delay(20);
   setTubeBrightness(averageTubeBrightness);
-  switchHVOn();
 
   digitalWrite(LED_BUILTIN, HIGH); // end of setup
 }
