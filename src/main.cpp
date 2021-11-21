@@ -247,12 +247,14 @@ bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
 }
 
 void powerDownTubes() {
-  tubePWMLevel -= 1;
+  tubePWMLevel--;
   if (tubePWMLevel < 0) {
     tubePWMLevel = 0;
   }
   setTubeBrightness(tubePWMLevel);
 }
+Ticker powerDownTubesTimer(powerDownTubes, 100, 255, MILLIS);
+
 #ifdef USE_TELNET_DEBUG
 void handleCommands() {
   if (commandServer.hasClient()) {
