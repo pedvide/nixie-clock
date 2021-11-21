@@ -279,6 +279,12 @@ void preventCathodePoisoning() {
 }
 Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 500, 2000, MILLIS);
 
+void rollRight() {
+  transitionToDigits(currentDigit4, currentDigit1, currentDigit2, currentDigit3,
+                     500);
+}
+Ticker rollRightTimer(rollRight, 800, 100, MILLIS);
+
 #ifdef USE_TELNET_DEBUG
 bool justConnected = true;
 void handleCommands() {
@@ -340,6 +346,14 @@ void handleCommands() {
         Serial.println("Stopping cathode poisoning prevention routine.");
         Serial.print("> ");
         preventCathodePoisoningTimer.stop();
+      } else if (command == "roll") {
+        Serial.println("Rolling right.");
+        Serial.print("> ");
+        rollRightTimer.start();
+      } else if (command == "roll stop") {
+        Serial.println("Stopping rolling right.");
+        Serial.print("> ");
+        rollRightTimer.stop();
       } else if (command == "power up") {
         Serial.println("Powering tubes up.");
         Serial.print("> ");
@@ -442,6 +456,9 @@ void loop() {
     }
   }
   powerDownTubesTimer.update();
+
+  // Only runs on command
+  rollRightTimer.update();
 
   // Day tasks
   if ((Amsterdam.hour() >= 8) &&
