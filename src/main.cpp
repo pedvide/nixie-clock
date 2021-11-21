@@ -139,55 +139,6 @@ bool connect_to_time() {
   return true;
 }
 
-#ifdef USE_TELNET_DEBUG
-void handleCommands() {
-  if (commandServer.hasClient()) {
-    // client is connected
-    if (!commandClient || !commandClient.connected()) {
-      if (commandClient) {
-        commandClient.stop(); // client disconnected
-      }
-      commandClient = commandServer.available(); // ready for new client
-    } else {
-      commandServer.available().stop(); // have client, block new conections
-    }
-  }
-
-  if (commandClient && commandClient.connected() && commandClient.available()) {
-    // client input processing
-    while (commandClient.available()) {
-      String command = commandClient.readStringUntil('\n');
-      // Serial.println(command);
-      if (command == "hv on") {
-        Serial.println("Switching HV on.");
-        switchHVOn();
-      } else if (command == "hv off") {
-        Serial.println("Switching HV off.");
-        switchHVOff();
-      } else if (command.startsWith("set brightness") ||
-                 command.startsWith("set br")) {
-        command.replace("set brightness ", "");
-        command.replace("set br ", "");
-        command.trim();
-        int32_t new_brightness = command.toInt();
-        if (new_brightness < 0) {
-          new_brightness = 0;
-        }
-        if (new_brightness > 255) {
-          new_brightness = 255;
-        }
-        Serial.printf("New brightness: %d.\n", new_brightness);
-        setTubeBrightness(new_brightness);
-      } else {
-        Serial.println("Command not recognized!");
-        Serial.println("Available commands: 'hv on', 'hv off', 'set "
-                       "(br)ightness <0-255>'");
-      }
-    }
-  }
-}
-#endif
-
 bool writeDigits(uint8_t digit1, uint8_t digit2, uint8_t digit3,
                  uint8_t digit4) {
   if ((digit1 > 9) | (digit2 > 9) | (digit3 > 9) | (digit4 > 9)) {
@@ -302,7 +253,64 @@ void powerDownTubes() {
   }
   setTubeBrightness(tubePWMLevel);
 }
-Ticker powerDownTubesTimer(powerDownTubes, 100, 0, MILLIS);
+#ifdef USE_TELNET_DEBUG
+void handleCommands() {
+  if (commandServer.hasClient()) {
+    // client is connected
+    if (!commandClient || !commandClient.connected()) {
+      if (commandClient) {
+        commandClient.stop(); // client disconnected
+      }
+      commandClient = commandServer.available(); // ready for new client
+    } else {
+      commandServer.available().stop(); // have client, block new conections
+    }
+  }
+
+  if (commandClient && commandClient.connected() && commandClient.available()) {
+    // client input processing
+    while (commandClient.available()) {
+      String command = commandClient.readStringUntil('\n');
+      // Serial.println(command);
+      if (command == "hv on") {
+        Serial.println("Switching HV on.");
+        switchHVOn();
+      } else if (command == "hv off") {
+        Serial.println("Switching HV off.");
+        switchHVOff();
+      } else if (command.startsWith("set brightness") ||
+                 command.startsWith("set br")) {
+        command.replace("set brightness ", "");
+        command.replace("set br ", "");
+        command.trim();
+        int32_t new_brightness = command.toInt();
+        if (new_brightness < 0) {
+          new_brightness = 0;
+        }
+        if (new_brightness > 255) {
+          new_brightness = 255;
+        }
+        Serial.printf("New brightness: %d.\n", new_brightness);
+        setTubeBrightness(new_brightness);
+      } else if (command == "run cathodes") {
+        Serial.println("Running cathode poisoning prevention routine.");
+        preventCathodePoisoningTimer.start();
+      } else if (command == "power down") {
+        Serial.println("Powering tubes down.");
+        powerDownTubesTimer.start();
+      } else if (command == "restart") {
+        Serial.println("Restarting!");
+        ESP.restart();
+      } else {
+        Serial.println("Command not recognized!");
+        Serial.println("Available commands: 'hv on', 'hv off', "
+                       "'set (br)ightness <0-255>', 'run cathodes', 'power "
+                       "down', 'restart'.");
+      }
+    }
+  }
+}
+#endif
 
 void setup() {
 
