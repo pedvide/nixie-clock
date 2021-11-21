@@ -26,10 +26,10 @@ const uint8_t averageTubeBrightness = 127;
 int8_t tubePWMLevel = averageTubeBrightness;
 
 #ifdef USE_TELNET_DEBUG
-///// Telnet
-WiFiServer TelnetServer(23);
-WiFiClient TelnetClient;
-#define Serial TelnetClient
+///// Command server
+WiFiServer commandServer(23);
+WiFiClient commandClient;
+#define Serial commandClient
 #endif
 
 void switchHVOn() { digitalWrite(hvEnablePin, HIGH); }
@@ -135,22 +135,22 @@ bool connect_to_time() {
 
 #ifdef USE_TELNET_DEBUG
 void handleTelnet() {
-  if (TelnetServer.hasClient()) {
+  if (commandServer.hasClient()) {
     // client is connected
-    if (!TelnetClient || !TelnetClient.connected()) {
-      if (TelnetClient) {
-        TelnetClient.stop(); // client disconnected
+    if (!commandClient || !commandClient.connected()) {
+      if (commandClient) {
+        commandClient.stop(); // client disconnected
       }
-      TelnetClient = TelnetServer.available(); // ready for new client
+      commandClient = commandServer.available(); // ready for new client
     } else {
-      TelnetServer.available().stop(); // have client, block new conections
+      commandServer.available().stop(); // have client, block new conections
     }
   }
 
-  if (TelnetClient && TelnetClient.connected() && TelnetClient.available()) {
+  if (commandClient && commandClient.connected() && commandClient.available()) {
     // client input processing
-    while (TelnetClient.available()) {
-      String command = TelnetClient.readStringUntil('\n');
+    while (commandClient.available()) {
+      String command = commandClient.readStringUntil('\n');
       // Serial.println(command);
       if (command == "hv on") {
         switchHVOn();
@@ -243,11 +243,11 @@ void setup() {
 
   connect_to_wifi();
 
-  setup_OTA();
-
 #ifdef USE_TELNET_DEBUG
-  TelnetServer.begin();
+  commandServer.begin();
 #endif
+
+  setup_OTA();
 
   connect_to_time();
 
