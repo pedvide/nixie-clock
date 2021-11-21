@@ -265,13 +265,12 @@ void powerDownTubes() {
 Ticker powerDownTubesTimer(powerDownTubes, 100, 255, MILLIS);
 
 void preventCathodePoisoning() {
-  // Wait for powe up to finish
+  // Wait for power up to finish
   if (powerUpTubesTimer.state() != RUNNING) {
-    setTubeBrightness(255);
     transitionToNumber(random(9999), 200);
   }
 }
-Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 500, 1000, MILLIS);
+Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 250, 2000, MILLIS);
 
 #ifdef USE_TELNET_DEBUG
 void handleCommands() {
