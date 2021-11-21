@@ -22,7 +22,8 @@ const uint8_t dataPin = D2;
 const uint8_t hvEnablePin = D6;
 const uint8_t anodePWMPin = D0;
 
-int8_t tubePWMLevel = 127;
+const uint8_t averageTubeBrightness = 127;
+int8_t tubePWMLevel = averageTubeBrightness;
 
 #ifdef USE_TELNET_DEBUG
 ///// Telnet
@@ -50,6 +51,23 @@ WiFiClient TelnetClient;
 #define Serial TelnetClient
 #endif
 
+void switchHVOn() { digitalWrite(hvEnablePin, HIGH); }
+
+void switchHVOff() { digitalWrite(hvEnablePin, LOW); }
+
+void setTubeBrightness(uint8_t brightness) {
+  if (brightness == 0) {
+    digitalWrite(anodePWMPin, LOW);
+  } else if (brightness == 255) {
+    digitalWrite(anodePWMPin, HIGH);
+  } else {
+    analogWrite(anodePWMPin, brightness);
+  }
+  tubePWMLevel = brightness;
+}
+
+int8_t getTubeBrightness() { return tubePWMLevel; }
+
 void connect_to_wifi() {
   Serial.println("Connecting to WiFi");
 
@@ -76,7 +94,7 @@ void connect_to_wifi() {
 
 void setup_OTA() {
   ArduinoOTA.onStart([]() {
-    digitalWrite(hvEnablePin, LOW); // HV off
+    switchHVOff();
     Serial.println("Starting the OTA update.");
   });
 
@@ -206,12 +224,10 @@ bool writeNumber(uint16_t number) {
 
 void powerDownTubes() {
   tubePWMLevel -= 1;
-  if (tubePWMLevel <= 0) {
+  if (tubePWMLevel < 0) {
     tubePWMLevel = 0;
-    digitalWrite(anodePWMPin, LOW);
-  } else {
-    analogWrite(anodePWMPin, tubePWMLevel);
   }
+  setTubeBrightness(tubePWMLevel);
 }
 Ticker powerDownTubesTimer(powerDownTubes, 100, 0, MILLIS);
 
@@ -245,8 +261,8 @@ void setup() {
   pinMode(anodePWMPin, OUTPUT);
   pinMode(hvEnablePin, OUTPUT);
   delay(20);
-  analogWrite(anodePWMPin, tubePWMLevel);
-  digitalWrite(hvEnablePin, HIGH);
+  setTubeBrightness(averageTubeBrightness);
+  switchHVOn();
 
   digitalWrite(LED_BUILTIN, HIGH); // end of setup
 }
@@ -265,22 +281,22 @@ void loop() {
   }
 
   if ((Amsterdam.hour() >= 0) && (Amsterdam.hour() <= 8)) {
-    if ((powerDownTubesTimer.state() != RUNNING) && (tubePWMLevel > 0)) {
+    if ((powerDownTubesTimer.state() != RUNNING) && (getTubeBrightness() > 0)) {
       Serial.println("Powering down tubes for the night...");
       powerDownTubesTimer.start();
     }
-    if ((powerDownTubesTimer.state() != STOPPED) && (tubePWMLevel == 0)) {
+    if ((powerDownTubesTimer.state() != STOPPED) &&
+        (getTubeBrightness() == 0)) {
       Serial.println("Tubes fully powered down.");
       powerDownTubesTimer.stop();
-      digitalWrite(hvEnablePin, LOW);
+      switchHVOff();
     }
     powerDownTubesTimer.update();
   } else {
-    if (tubePWMLevel == 0) {
+    if (getTubeBrightness() == 0) {
       Serial.println("Powering up tubes for the day.");
-      tubePWMLevel = 127;
-      digitalWrite(hvEnablePin, HIGH);
-      analogWrite(anodePWMPin, tubePWMLevel);
+      switchHVOn();
+      setTubeBrightness(averageTubeBrightness);
     }
   }
 
