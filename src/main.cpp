@@ -403,7 +403,8 @@ void loop() {
   powerDownTubesTimer.update();
 
   // Day tasks
-  if (Amsterdam.hour() >= 8) {
+  if ((Amsterdam.hour() >= 8) &&
+      (preventCathodePoisoningTimer.state() != RUNNING)) {
     // Only change display if the time has changed
     if (Amsterdam.minute() != lastMinute) {
       transitionToTime(Amsterdam.hour(), Amsterdam.minute());
