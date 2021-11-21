@@ -278,20 +278,30 @@ void preventCathodePoisoning() {
 Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 250, 2000, MILLIS);
 
 #ifdef USE_TELNET_DEBUG
+bool justConnected = true;
 void handleCommands() {
   if (commandServer.hasClient()) {
     // client is connected
     if (!commandClient || !commandClient.connected()) {
       if (commandClient) {
         commandClient.stop(); // client disconnected
+        justConnected = true;
       }
       commandClient = commandServer.available(); // ready for new client
     } else {
       commandServer.available().stop(); // have client, block new conections
+      justConnected = true;
     }
   }
 
-  if (commandClient && commandClient.connected() && commandClient.available()) {
+  if (commandClient && commandClient.connected()) {
+    // On first connection
+    if (justConnected) {
+      Serial.println("Nixie tube clock");
+      Serial.print("> ");
+    }
+    justConnected = false;
+
     // client input processing
     while (commandClient.available()) {
       String command = commandClient.readStringUntil('\n');
