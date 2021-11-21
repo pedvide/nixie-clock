@@ -236,6 +236,47 @@ bool writeNumber(uint16_t number) {
   return writeDigits(digit1, digit2, digit3, digit4);
 }
 
+bool transitionToDigits(uint8_t toDigit1, uint8_t toDigit2, uint8_t toDigit3,
+                        uint8_t toDigit4, uint8_t maxIterations = 100) {
+  if ((toDigit1 > 9) | (toDigit2 > 9) | (toDigit3 > 9) | (toDigit4 > 9)) {
+    return false;
+  }
+
+  const uint8_t fromDigit1 = currentDigit1;
+  const uint8_t fromDigit2 = currentDigit2;
+  const uint8_t fromDigit3 = currentDigit3;
+  const uint8_t fromDigit4 = currentDigit4;
+
+  const uint8_t currentTubeBrightness = getTubeBrightness();
+  for (uint32_t i = 0; i < maxIterations; i++) {
+
+    writeDigits(fromDigit1, fromDigit2, fromDigit3, fromDigit4);
+    setTubeBrightness(map(maxIterations - i, 0, maxIterations, 1,
+                          currentTubeBrightness * 1.9));
+    delay(5);
+    writeDigits(toDigit1, toDigit2, toDigit3, toDigit4);
+    setTubeBrightness(map(i, 0, maxIterations, 1, currentTubeBrightness * 1.9));
+    delay(5);
+  }
+
+  setTubeBrightness(currentTubeBrightness);
+  return writeDigits(toDigit1, toDigit2, toDigit3, toDigit4);
+}
+
+bool transitionToNumber(uint16_t toNumber, uint8_t maxIterations = 100) {
+  if (toNumber > 9999) {
+    return false;
+  }
+
+  uint8_t toDigit4 = toNumber % 10;
+  uint8_t toDigit3 = int(toNumber / 10) % 10;
+  uint8_t toDigit2 = int(toNumber / 100) % 10;
+  uint8_t toDigit1 = int(toNumber / 1000) % 10;
+
+  return transitionToDigits(toDigit1, toDigit2, toDigit3, toDigit4,
+                            maxIterations);
+}
+
 void powerDownTubes() {
   tubePWMLevel -= 1;
   if (tubePWMLevel < 0) {
