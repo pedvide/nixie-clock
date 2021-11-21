@@ -249,7 +249,6 @@ bool transitionToDigits(uint8_t toDigit1, uint8_t toDigit2, uint8_t toDigit3,
 
   const uint8_t currentTubeBrightness = getTubeBrightness();
   for (uint32_t i = 0; i < maxIterations; i++) {
-
     writeDigits(fromDigit1, fromDigit2, fromDigit3, fromDigit4);
     setTubeBrightness(map(maxIterations - i, 0, maxIterations, 1,
                           currentTubeBrightness * 1.9));
@@ -272,6 +271,22 @@ bool transitionToNumber(uint16_t toNumber, uint8_t maxIterations = 100) {
   uint8_t toDigit3 = int(toNumber / 10) % 10;
   uint8_t toDigit2 = int(toNumber / 100) % 10;
   uint8_t toDigit1 = int(toNumber / 1000) % 10;
+
+  return transitionToDigits(toDigit1, toDigit2, toDigit3, toDigit4,
+                            maxIterations);
+}
+
+bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
+                      uint8_t maxIterations = 100) {
+  if ((toHours > 23) | (toMinutes > 59)) {
+    return false;
+  }
+  Serial.printf("Time changed to %02d:%02d.\n", toHours, toMinutes);
+
+  uint8_t toDigit4 = toMinutes % 10;
+  uint8_t toDigit3 = int(toMinutes / 10) % 10;
+  uint8_t toDigit2 = toHours % 10;
+  uint8_t toDigit1 = int(toHours / 10) % 10;
 
   return transitionToDigits(toDigit1, toDigit2, toDigit3, toDigit4,
                             maxIterations);
@@ -331,7 +346,7 @@ void loop() {
 
   // Only change display if the time has changed
   if (Amsterdam.minute() != lastMinute) {
-    writeTime(Amsterdam.hour(), Amsterdam.minute());
+    transitionToTime(Amsterdam.hour(), Amsterdam.minute());
     lastMinute = Amsterdam.minute();
   }
 
