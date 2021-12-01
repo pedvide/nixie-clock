@@ -379,6 +379,7 @@ void handleCommands() {
         Serial.println("Available commands: 'hv on', 'hv off', "
                        "'(br)ightness <0-255>', 'time', "
                        "'random', 'random stop', "
+                       "'roll', 'roll stop', "
                        "'power down', 'power up', 'restart'.");
         Serial.print("> ");
       }
