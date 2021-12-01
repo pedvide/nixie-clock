@@ -282,11 +282,11 @@ void powerDownTubes() {
 void preventCathodePoisoning() {
   // Wait for power up to finish
   if (powerUpTubesTimer.state() != RUNNING) {
-    transitionToDigits((currentDigit1 + 1) % 10, (currentDigit2 + 1) % 10,
-                       (currentDigit3 + 1) % 10, (currentDigit4 + 1) % 10, 400);
+    writeDigits((currentDigit1 + 1) % 10, (currentDigit2 + 1) % 10,
+                (currentDigit3 + 1) % 10, (currentDigit4 + 1) % 10);
   }
 }
-Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 500, 2000, MILLIS);
+Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 5000, 120, MILLIS);
 
 void rollRight() {
   transitionToDigits(currentDigit4, currentDigit1, currentDigit2, currentDigit3,
@@ -470,10 +470,17 @@ void loop() {
     if (preventCathodePoisoningTimer.state() != RUNNING) {
       Serial.println("Running cathode poisoning prevention routine.");
       Serial.print("> ");
+      setTubeBrightness(255);
       preventCathodePoisoningTimer.start();
     }
   }
   preventCathodePoisoningTimer.update();
+
+  // After cathode routine, set tube brightness back to normal
+  if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 15)) {
+    preventCathodePoisoningTimer.stop();
+    setTubeBrightness(averageTubeBrightness);
+  }
 
   // Switch tubes off for the night at midnight
   if ((Amsterdam.hour() == 0) && (Amsterdam.minute() == 0)) {
