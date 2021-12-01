@@ -327,7 +327,7 @@ void handleCommands() {
         command.replace("brightness ", "");
         command.replace("br ", "");
         command.trim();
-        if (command = '') {
+        if (command == "") {
           Serial.printf("brightness: %d.\n", getTubeBrightness());
           Serial.print("> ");
         } else {
