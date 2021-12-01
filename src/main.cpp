@@ -205,15 +205,19 @@ bool transitionToDigits(uint8_t toDigit1, uint8_t toDigit2, uint8_t toDigit3,
   const uint8_t fromDigit4 = currentDigit4;
 
   const uint8_t currentTubeBrightness = getTubeBrightness();
-  const uint8_t maxIterations = transitionTime_ms / 10;
+  // Each iteration takes half_delay ms, due to the delay statements
+  // (all other statements are much faster)
+  // So iterate transitionTime_ms/(2*half_delay) times
+  const uint8_t half_delay = 5;
+  const uint8_t maxIterations = transitionTime_ms / (2 * half_delay);
   for (uint32_t i = 0; i < maxIterations; i++) {
     writeDigits(fromDigit1, fromDigit2, fromDigit3, fromDigit4);
     setTubeBrightness(map(maxIterations - i, 0, maxIterations, 1,
                           currentTubeBrightness * 1.9));
-    delay(5);
+    delay(half_delay);
     writeDigits(toDigit1, toDigit2, toDigit3, toDigit4);
     setTubeBrightness(map(i, 0, maxIterations, 1, currentTubeBrightness * 1.9));
-    delay(5);
+    delay(half_delay);
   }
 
   setTubeBrightness(currentTubeBrightness);
