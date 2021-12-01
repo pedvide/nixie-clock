@@ -258,7 +258,7 @@ void powerUpTubes() {
   }
   setTubeBrightness(tubePWMLevel);
 }
-Ticker powerUpTubesTimer(powerUpTubes, 100, 127, MILLIS);
+Ticker powerUpTubesTimer(powerUpTubes, 500, 127, MILLIS);
 
 void powerDownTubes() {
   tubePWMLevel--;
@@ -267,7 +267,7 @@ void powerDownTubes() {
   }
   setTubeBrightness(tubePWMLevel);
 }
-Ticker powerDownTubesTimer(powerDownTubes, 100, 255, MILLIS);
+Ticker powerDownTubesTimer(powerDownTubes, 500, 255, MILLIS);
 
 void preventCathodePoisoning() {
   // Wait for power up to finish
