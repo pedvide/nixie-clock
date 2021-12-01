@@ -455,7 +455,7 @@ void loop() {
   handleCommands();
 #endif
 
-  // Switch tubes on for the day and
+  // Switch tubes on for the day
   if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 0)) {
     if (powerUpTubesTimer.state() != RUNNING) {
       Serial.println("Powering up tubes for the day...");
