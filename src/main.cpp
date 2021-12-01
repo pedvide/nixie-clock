@@ -436,21 +436,23 @@ void loop() {
 #endif
 
   // Switch tubes on for the day and
-  // run the cathode poisoning prevention routine
   if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 0)) {
     if (powerUpTubesTimer.state() != RUNNING) {
-      Serial.println("Powering up tubes for the night...");
+      Serial.println("Powering up tubes for the day...");
       Serial.print("> ");
       powerUpTubesTimer.start();
     }
+  }
+  powerUpTubesTimer.update();
 
+  // Run the cathode poisoning prevention routine
+  if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 5)) {
     if (preventCathodePoisoningTimer.state() != RUNNING) {
       Serial.println("Running cathode poisoning prevention routine.");
       Serial.print("> ");
       preventCathodePoisoningTimer.start();
     }
   }
-  powerUpTubesTimer.update();
   preventCathodePoisoningTimer.update();
 
   // Switch tubes off for the night at midnight
