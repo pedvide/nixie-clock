@@ -313,6 +313,7 @@ void handleCommands() {
     // client input processing
     while (commandClient.available()) {
       String command = commandClient.readStringUntil('\n');
+      command.trim();
       // Serial.println(command);
       if (command == "hv on") {
         Serial.println("Switching HV on.");
@@ -326,16 +327,21 @@ void handleCommands() {
         command.replace("brightness ", "");
         command.replace("br ", "");
         command.trim();
-        int32_t new_brightness = command.toInt();
-        if (new_brightness < 0) {
-          new_brightness = 0;
+        if (command = '') {
+          Serial.printf("brightness: %d.\n", getTubeBrightness());
+          Serial.print("> ");
+        } else {
+          int32_t new_brightness = command.toInt();
+          if (new_brightness < 0) {
+            new_brightness = 0;
+          }
+          if (new_brightness > 255) {
+            new_brightness = 255;
+          }
+          Serial.printf("New brightness: %d.\n", new_brightness);
+          Serial.print("> ");
+          setTubeBrightness(new_brightness);
         }
-        if (new_brightness > 255) {
-          new_brightness = 255;
-        }
-        Serial.printf("New brightness: %d.\n", new_brightness);
-        Serial.print("> ");
-        setTubeBrightness(new_brightness);
       } else if (command == "time") {
         transitionToTime(Amsterdam.hour(), Amsterdam.minute());
       } else if (command == "random") {
