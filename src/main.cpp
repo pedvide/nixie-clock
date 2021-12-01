@@ -251,23 +251,29 @@ bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
                             transitionTime_ms);
 }
 
+void powerUpTubes();
+Ticker powerUpTubesTimer(powerUpTubes, 500, 0, MILLIS);
 void powerUpTubes() {
-  tubePWMLevel++;
-  if (tubePWMLevel > averageTubeBrightness) {
-    tubePWMLevel = averageTubeBrightness;
+  const uint8_t currentLevel = getTubeBrightness();
+  if (currentLevel >= averageTubeBrightness) {
+    Serial.printf("\nTubes fully powered up\n> ");
+    powerUpTubesTimer.stop();
+  } else {
+    setTubeBrightness(currentLevel + 1);
   }
-  setTubeBrightness(tubePWMLevel);
 }
-Ticker powerUpTubesTimer(powerUpTubes, 500, 127, MILLIS);
 
+void powerDownTubes();
+Ticker powerDownTubesTimer(powerDownTubes, 500, 0, MILLIS);
 void powerDownTubes() {
-  tubePWMLevel--;
-  if (tubePWMLevel < 0) {
-    tubePWMLevel = 0;
+  const uint8_t currentLevel = getTubeBrightness();
+  if (currentLevel == 0) {
+    Serial.printf("\nTubes fully powered down\n> ");
+    powerDownTubesTimer.stop();
+  } else {
+    setTubeBrightness(currentLevel - 1);
   }
-  setTubeBrightness(tubePWMLevel);
 }
-Ticker powerDownTubesTimer(powerDownTubes, 500, 255, MILLIS);
 
 void preventCathodePoisoning() {
   // Wait for power up to finish
