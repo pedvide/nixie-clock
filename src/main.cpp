@@ -278,7 +278,6 @@ void powerDownTubes() {
 void preventCathodePoisoning() {
   // Wait for power up to finish
   if (powerUpTubesTimer.state() != RUNNING) {
-    // transitionToNumber(random(9999), 350);
     transitionToDigits((currentDigit1 + 1) % 10, (currentDigit2 + 1) % 10,
                        (currentDigit3 + 1) % 10, (currentDigit4 + 1) % 10, 400);
   }
@@ -290,6 +289,9 @@ void rollRight() {
                      500);
 }
 Ticker rollRightTimer(rollRight, 800, 100, MILLIS);
+
+void randomNumbers() { transitionToNumber(random(9999), 500); }
+Ticker randomNumbersTimer(randomNumbers, 800, 100, MILLIS);
 
 #ifdef USE_TELNET_DEBUG
 bool justConnected = true;
@@ -348,14 +350,22 @@ void handleCommands() {
         setTubeBrightness(new_brightness);
       } else if (command == "time") {
         transitionToTime(Amsterdam.hour(), Amsterdam.minute());
-      } else if (command == "random") {
+      } else if (command == "cathode") {
         Serial.println("Running cathode poisoning prevention routine.");
         Serial.print("> ");
         preventCathodePoisoningTimer.start();
-      } else if (command == "random stop") {
+      } else if (command == "cathode stop") {
         Serial.println("Stopping cathode poisoning prevention routine.");
         Serial.print("> ");
         preventCathodePoisoningTimer.stop();
+      } else if (command == "random") {
+        Serial.println("Random numbers.");
+        Serial.print("> ");
+        randomNumbersTimer.start();
+      } else if (command == "random stop") {
+        Serial.println("Stopping random numbers.");
+        Serial.print("> ");
+        randomNumbersTimer.stop();
       } else if (command == "roll") {
         Serial.println("Rolling right.");
         Serial.print("> ");
@@ -384,6 +394,7 @@ void handleCommands() {
         Serial.println("Command not recognized!");
         Serial.println("Available commands: 'hv on', 'hv off', "
                        "'(br)ightness <0-255>', 'time', "
+                       "'cathode', 'cathode stop', "
                        "'random', 'random stop', "
                        "'roll', 'roll stop', "
                        "'power down', 'power up', 'restart'.");
@@ -472,6 +483,7 @@ void loop() {
 
   // Only runs on command
   rollRightTimer.update();
+  randomNumbersTimer.update();
 
   // Day tasks
   if ((Amsterdam.hour() >= 8) &&
