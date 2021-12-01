@@ -53,7 +53,7 @@ void setTubeBrightness(uint8_t brightness) {
   tubePWMLevel = brightness;
 }
 
-int8_t getTubeBrightness() { return tubePWMLevel; }
+uint8_t getTubeBrightness() { return tubePWMLevel; }
 
 void connect_to_wifi() {
   Serial.println("Connecting to WiFi");
