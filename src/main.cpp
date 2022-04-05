@@ -42,6 +42,7 @@ void switchHVOff() { digitalWrite(hvEnablePin, LOW); }
 
 void setTubeBrightness(uint8_t brightness) {
   if (brightness == 0) {
+    switchHVOff();
     digitalWrite(anodePWMPin, LOW);
   } else if (brightness == 255) {
     switchHVOn();
