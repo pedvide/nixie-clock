@@ -129,8 +129,11 @@ bool connect_to_time() {
   }
   Amsterdam.setDefault();
 
-  if (!waitForSync(5)) {
-    return false;
+  if (!waitForSync(30)) {
+    setServer("pool.ntp.org");
+    if (!waitForSync(30)) {
+      return false;
+    }
   }
   setInterval(60 * 60); // 1h in seconds
 
