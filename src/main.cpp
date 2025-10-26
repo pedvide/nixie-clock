@@ -29,6 +29,14 @@ uint8_t currentDigit1, currentDigit2, currentDigit3, currentDigit4;
 const uint8_t averageTubeBrightness = 127;
 int8_t tubePWMLevel = averageTubeBrightness;
 
+// status
+bool HVisOn = false;
+bool startedToday = false;
+bool sleeping = false;
+bool cathodePreventionToday = false;
+uint8_t START_HOUR = 8;
+uint8_t END_HOUR = 0;
+
 #ifdef USE_TELNET_DEBUG
 ///// Command server
 WiFiServer commandServer(23);
@@ -36,19 +44,33 @@ WiFiClient commandClient;
 #define Serial commandClient
 #endif
 
-void switchHVOn() { digitalWrite(hvEnablePin, HIGH); }
+void switchHVOn() {
+  digitalWrite(hvEnablePin, HIGH);
+  HVisOn = true;
+}
 
-void switchHVOff() { digitalWrite(hvEnablePin, LOW); }
+void switchHVOff() {
+  digitalWrite(hvEnablePin, LOW);
+  HVisOn = false;
+}
+
+bool isHVOn() { return HVisOn; }
 
 void setTubeBrightness(uint8_t brightness) {
   if (brightness == 0) {
-    switchHVOff();
+    if (isHVOn()) {
+      switchHVOff();
+    }
     digitalWrite(anodePWMPin, LOW);
   } else if (brightness == 255) {
-    switchHVOn();
+    if (!isHVOn()) {
+      switchHVOn();
+    }
     digitalWrite(anodePWMPin, HIGH);
   } else {
-    switchHVOn();
+    if (!isHVOn()) {
+      switchHVOn();
+    }
     analogWrite(anodePWMPin, brightness);
   }
   tubePWMLevel = brightness;
@@ -224,7 +246,7 @@ void powerUpTubes();
 Ticker powerUpTubesTimer(powerUpTubes, 500, 0, MILLIS);
 void powerUpTubes() {
   const uint8_t currentLevel = getTubeBrightness();
-  if (currentLevel >= averageTubeBrightness) {
+  if (currentLevel >= 255) {
     Serial.printf("\nTubes fully powered up\n> ");
     powerUpTubesTimer.stop();
   } else {
@@ -244,23 +266,14 @@ void powerDownTubes() {
   }
 }
 
+void randomNumbers() { transitionToNumber(random(9999), 500); }
 void preventCathodePoisoning() {
   // Wait for power up to finish
   if (powerUpTubesTimer.state() != RUNNING) {
-    writeDigits((currentDigit1 + 1) % 10, (currentDigit2 + 1) % 10,
-                (currentDigit3 + 1) % 10, (currentDigit4 + 1) % 10);
+    randomNumbers();
   }
 }
 Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 5000, 120, MILLIS);
-
-void rollRight() {
-  transitionToDigits(currentDigit4, currentDigit1, currentDigit2, currentDigit3,
-                     500);
-}
-Ticker rollRightTimer(rollRight, 800, 100, MILLIS);
-
-void randomNumbers() { transitionToNumber(random(9999), 500); }
-Ticker randomNumbersTimer(randomNumbers, 800, 100, MILLIS);
 
 void setup_OTA() {
   ArduinoOTA.onStart([]() {
@@ -314,9 +327,9 @@ void handleCommands() {
         commandClient.stop(); // client disconnected
         justConnected = true;
       }
-      commandClient = commandServer.available(); // ready for new client
+      commandClient = commandServer.accept(); // ready for new client
     } else {
-      commandServer.available().stop(); // have client, block new conections
+      commandServer.accept().stop(); // have client, block new conections
       justConnected = true;
     }
   }
@@ -324,7 +337,7 @@ void handleCommands() {
   if (commandClient && commandClient.connected()) {
     // On first connection
     if (justConnected) {
-      Serial.println("Nixie tube clock");
+      Serial.println("Nixie tube clock (type help for commands)");
       Serial.print("> ");
     }
     justConnected = false;
@@ -336,15 +349,12 @@ void handleCommands() {
       // Serial.println(command);
       if (command == "hv on") {
         Serial.println("Switching HV on.");
-        Serial.print("> ");
         switchHVOn();
       } else if (command == "hv off") {
         Serial.println("Switching HV off.");
-        Serial.print("> ");
         switchHVOff();
       } else if ((command == "brightness") || (command == "br")) {
         Serial.printf("brightness: %d.\n", getTubeBrightness());
-        Serial.print("> ");
       } else if (command.startsWith("brightness") || command.startsWith("br")) {
         command.replace("brightness ", "");
         command.replace("br ", "");
@@ -357,41 +367,20 @@ void handleCommands() {
           new_brightness = 255;
         }
         Serial.printf("New brightness: %d.\n", new_brightness);
-        Serial.print("> ");
         setTubeBrightness(new_brightness);
       } else if (command == "time") {
         transitionToTime(Amsterdam.hour(), Amsterdam.minute());
       } else if (command == "cathode") {
         Serial.println("Running cathode poisoning prevention routine.");
-        Serial.print("> ");
         preventCathodePoisoningTimer.start();
       } else if (command == "cathode stop") {
         Serial.println("Stopping cathode poisoning prevention routine.");
-        Serial.print("> ");
         preventCathodePoisoningTimer.stop();
-      } else if (command == "random") {
-        Serial.println("Random numbers.");
-        Serial.print("> ");
-        randomNumbersTimer.start();
-      } else if (command == "random stop") {
-        Serial.println("Stopping random numbers.");
-        Serial.print("> ");
-        randomNumbersTimer.stop();
-      } else if (command == "roll") {
-        Serial.println("Rolling right.");
-        Serial.print("> ");
-        rollRightTimer.start();
-      } else if (command == "roll stop") {
-        Serial.println("Stopping rolling right.");
-        Serial.print("> ");
-        rollRightTimer.stop();
       } else if (command == "power up") {
         Serial.println("Powering tubes up.");
-        Serial.print("> ");
         powerUpTubesTimer.start();
       } else if (command == "power down") {
         Serial.println("Powering tubes down.");
-        Serial.print("> ");
         powerDownTubesTimer.start();
       } else if (command == "restart") {
         Serial.println("Restarting!");
@@ -399,18 +388,16 @@ void handleCommands() {
         delay(10);
         commandClient.stop();
         ESP.restart();
-      } else if (command == "") {
-        Serial.print("> ");
       } else {
-        Serial.println("Command not recognized!");
-        Serial.println("Available commands: 'hv on', 'hv off', "
+        if (command != "help") {
+          Serial.println("Command not recognized!");
+        }
+        Serial.println("Available commands: 'help', 'hv on', 'hv off', "
                        "'(br)ightness <0-255>', 'time', "
                        "'cathode', 'cathode stop', "
-                       "'random', 'random stop', "
-                       "'roll', 'roll stop', "
                        "'power down', 'power up', 'restart'.");
-        Serial.print("> ");
       }
+      Serial.print("> ");
     }
   }
 }
@@ -447,7 +434,62 @@ void setup() {
   delay(20);
   setTubeBrightness(averageTubeBrightness);
 
+  // stop all timers to set their status
+  powerUpTubesTimer.stop();
+  powerDownTubesTimer.stop();
+  preventCathodePoisoningTimer.stop();
+
   digitalWrite(LED_BUILTIN, HIGH); // end of setup
+}
+
+void dailyStartUp() {
+  preventCathodePoisoningTimer.update();
+  powerUpTubesTimer.update();
+
+  // Switch tubes on for the day
+  if ((Amsterdam.hour() == START_HOUR) && (!startedToday)) {
+    Serial.println("Powering up tubes for the day...");
+    Serial.print("> ");
+    powerUpTubesTimer.start();
+    startedToday = true;
+    sleeping = false;
+    cathodePreventionToday = false;
+  }
+
+  // wait until tubes are powered up
+  if ((powerUpTubesTimer.state() == RUNNING)) {
+    return;
+  }
+
+  // Run the cathode poisoning prevention routine
+  if ((Amsterdam.hour() == START_HOUR) && (!cathodePreventionToday)) {
+    Serial.println("Running cathode poisoning prevention routine.");
+    Serial.print("> ");
+    setTubeBrightness(255);
+    preventCathodePoisoningTimer.start();
+    cathodePreventionToday = true;
+  }
+
+  // wait until cathode routine is done
+  if ((preventCathodePoisoningTimer.state() == RUNNING)) {
+    return;
+  } else {
+    // After cathode routine, set tube brightness back to normal
+    setTubeBrightness(averageTubeBrightness);
+  }
+}
+
+void dailySwitchOff() {
+  // Switch tubes off for the night at midnight
+  if ((Amsterdam.hour() == END_HOUR) &&
+      (powerDownTubesTimer.state() != RUNNING)) {
+    Serial.println("Powering down tubes for the night...");
+    Serial.print("> ");
+    powerDownTubesTimer.start();
+    startedToday = false;
+    sleeping = true;
+  }
+  powerDownTubesTimer.update();
 }
 
 void loop() {
@@ -462,50 +504,12 @@ void loop() {
   handleCommands();
 #endif
 
-  // Switch tubes on for the day
-  if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 0)) {
-    if (powerUpTubesTimer.state() != RUNNING) {
-      Serial.println("Powering up tubes for the day...");
-      Serial.print("> ");
-      powerUpTubesTimer.start();
-    }
-  }
-  powerUpTubesTimer.update();
+  dailyStartUp();
 
-  // Run the cathode poisoning prevention routine
-  if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 5)) {
-    if (preventCathodePoisoningTimer.state() != RUNNING) {
-      Serial.println("Running cathode poisoning prevention routine.");
-      Serial.print("> ");
-      setTubeBrightness(255);
-      preventCathodePoisoningTimer.start();
-    }
-  }
-  preventCathodePoisoningTimer.update();
-
-  // After cathode routine, set tube brightness back to normal
-  if ((Amsterdam.hour() == 8) && (Amsterdam.minute() == 15)) {
-    preventCathodePoisoningTimer.stop();
-    setTubeBrightness(averageTubeBrightness);
-  }
-
-  // Switch tubes off for the night at midnight
-  if ((Amsterdam.hour() == 0) && (Amsterdam.minute() == 0)) {
-    if (powerDownTubesTimer.state() != RUNNING) {
-      Serial.println("Powering down tubes for the night...");
-      Serial.print("> ");
-      powerDownTubesTimer.start();
-    }
-  }
-  powerDownTubesTimer.update();
-
-  // Only runs on command
-  rollRightTimer.update();
-  randomNumbersTimer.update();
+  dailySwitchOff();
 
   // Day tasks
-  if ((Amsterdam.hour() >= 8) &&
-      (preventCathodePoisoningTimer.state() != RUNNING)) {
+  if ((!sleeping) && (preventCathodePoisoningTimer.state() != RUNNING)) {
     // Only change display if the time has changed
     if (Amsterdam.minute() != lastMinute) {
       transitionToTime(Amsterdam.hour(), Amsterdam.minute());
