@@ -80,45 +80,6 @@ void connect_to_wifi() {
   WiFi.setAutoReconnect(true);
 }
 
-void setup_OTA() {
-  ArduinoOTA.onStart([]() {
-    switchHVOff();
-    Serial.println("Starting the OTA update.");
-#ifdef USE_TELNET_DEBUG
-    commandClient.stop();
-#endif
-  });
-
-  ArduinoOTA.onEnd([]() { Serial.println("Finished the OTA update."); });
-
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    static uint8_t last_perc_progress = 0;
-    uint8_t perc_progress = (progress / (total / 100));
-    if (((perc_progress % 10) == 0) && (perc_progress > last_perc_progress)) {
-      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-      Serial.printf("OTA progress: %u%%.\n", perc_progress);
-      last_perc_progress = perc_progress;
-    }
-  });
-
-  ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("OTA Error (%u): ", error);
-    if (error == OTA_AUTH_ERROR)
-      Serial.println(F("Auth Failed"));
-    else if (error == OTA_BEGIN_ERROR)
-      Serial.println(F("Begin Failed"));
-    else if (error == OTA_CONNECT_ERROR)
-      Serial.println(F("Connect Failed"));
-    else if (error == OTA_RECEIVE_ERROR)
-      Serial.println(F("Receive Failed"));
-    else if (error == OTA_END_ERROR)
-      Serial.println(F("End Failed"));
-  });
-
-  ArduinoOTA.begin();
-  Serial.println("OTA enabled.");
-}
-
 bool connect_to_time() {
   Serial.println("Connecting to time server");
   setDebug(ezDebugLevel_t::INFO);
@@ -300,6 +261,48 @@ Ticker rollRightTimer(rollRight, 800, 100, MILLIS);
 
 void randomNumbers() { transitionToNumber(random(9999), 500); }
 Ticker randomNumbersTimer(randomNumbers, 800, 100, MILLIS);
+
+void setup_OTA() {
+  ArduinoOTA.onStart([]() {
+    Serial.println("Starting the OTA update.");
+#ifdef USE_TELNET_DEBUG
+    commandClient.stop();
+#endif
+  });
+
+  ArduinoOTA.onEnd([]() { Serial.println("Finished the OTA update."); });
+
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    static uint8_t last_perc_progress = 0;
+    uint8_t perc_progress = (progress / (total / 100));
+    if (((perc_progress % 10) == 0) && (perc_progress > last_perc_progress)) {
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+      writeNumber(perc_progress);
+      Serial.printf("OTA progress: %u%%.\n", perc_progress);
+      last_perc_progress = perc_progress;
+    }
+  });
+
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("OTA Error (%u): ", error);
+    writeNumber((uint8_t)error);
+    if (error == OTA_AUTH_ERROR)
+      Serial.println(F("Auth Failed"));
+    else if (error == OTA_BEGIN_ERROR)
+      Serial.println(F("Begin Failed"));
+    else if (error == OTA_CONNECT_ERROR)
+      Serial.println(F("Connect Failed"));
+    else if (error == OTA_RECEIVE_ERROR)
+      Serial.println(F("Receive Failed"));
+    else if (error == OTA_END_ERROR)
+      Serial.println(F("End Failed"));
+
+    delay(100);
+  });
+
+  ArduinoOTA.begin();
+  Serial.println("OTA enabled.");
+}
 
 #ifdef USE_TELNET_DEBUG
 bool justConnected = true;
