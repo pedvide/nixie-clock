@@ -27,15 +27,16 @@ uint8_t currentDigit1, currentDigit2, currentDigit3, currentDigit4;
 
 // Brightness
 const uint8_t averageTubeBrightness = 127;
+const uint8_t maxTubeBrightness = 230;
 int8_t tubePWMLevel = averageTubeBrightness;
 
 // status
 bool HVisOn = false;
 bool startedToday = false;
-bool sleeping = false;
+bool sleeping = true;
 bool cathodePreventionToday = false;
 uint8_t START_HOUR = 8;
-uint8_t END_HOUR = 0;
+uint8_t END_HOUR = 23;
 
 #ifdef USE_TELNET_DEBUG
 ///// Command server
@@ -57,22 +58,10 @@ void switchHVOff() {
 bool isHVOn() { return HVisOn; }
 
 void setTubeBrightness(uint8_t brightness) {
-  if (brightness == 0) {
-    if (isHVOn()) {
-      switchHVOff();
-    }
-    digitalWrite(anodePWMPin, LOW);
-  } else if (brightness == 255) {
-    if (!isHVOn()) {
-      switchHVOn();
-    }
-    digitalWrite(anodePWMPin, HIGH);
-  } else {
-    if (!isHVOn()) {
-      switchHVOn();
-    }
-    analogWrite(anodePWMPin, brightness);
+  if (brightness > maxTubeBrightness) {
+    brightness = maxTubeBrightness;
   }
+  analogWrite(anodePWMPin, brightness);
   tubePWMLevel = brightness;
 }
 
@@ -120,9 +109,8 @@ bool connect_to_time() {
   }
   setInterval(60 * 60); // 1h in seconds
 
-  Serial.printf("  Connection stablished with the time server (%s). Using "
-                "Amsterdam time.\n",
-                UTC.dateTime().c_str());
+  Serial.println(
+      "  Connection stablished with the time server. Using Amsterdam time.");
   Serial.println("  UTC: " + UTC.dateTime());
   Serial.println("  Amsterdam time: " + Amsterdam.dateTime());
 
@@ -192,6 +180,11 @@ bool transitionToDigits(uint8_t toDigit1, uint8_t toDigit2, uint8_t toDigit3,
   const uint8_t fromDigit4 = currentDigit4;
 
   const uint8_t currentTubeBrightness = getTubeBrightness();
+  const float brightnessMultiplier = 1.9;
+  const uint8_t higherTubeBrightness =
+      currentTubeBrightness > 134
+          ? maxTubeBrightness
+          : currentTubeBrightness * brightnessMultiplier;
   // Each iteration takes half_delay ms, due to the delay statements
   // (all other statements are much faster)
   // So iterate transitionTime_ms/(2*half_delay) times
@@ -199,11 +192,11 @@ bool transitionToDigits(uint8_t toDigit1, uint8_t toDigit2, uint8_t toDigit3,
   const uint8_t maxIterations = transitionTime_ms / (2 * half_delay);
   for (uint32_t i = 0; i < maxIterations; i++) {
     writeDigits(fromDigit1, fromDigit2, fromDigit3, fromDigit4);
-    setTubeBrightness(map(maxIterations - i, 0, maxIterations, 1,
-                          currentTubeBrightness * 1.9));
+    setTubeBrightness(
+        map(maxIterations - i, 0, maxIterations, 1, higherTubeBrightness));
     delay(half_delay);
     writeDigits(toDigit1, toDigit2, toDigit3, toDigit4);
-    setTubeBrightness(map(i, 0, maxIterations, 1, currentTubeBrightness * 1.9));
+    setTubeBrightness(map(i, 0, maxIterations, 1, higherTubeBrightness));
     delay(half_delay);
   }
 
@@ -243,10 +236,10 @@ bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
 }
 
 void powerUpTubes();
-Ticker powerUpTubesTimer(powerUpTubes, 500, 0, MILLIS);
+Ticker powerUpTubesTimer(powerUpTubes, 500, 255, MILLIS);
 void powerUpTubes() {
   const uint8_t currentLevel = getTubeBrightness();
-  if (currentLevel >= 255) {
+  if (currentLevel >= maxTubeBrightness) {
     Serial.printf("\nTubes fully powered up\n> ");
     powerUpTubesTimer.stop();
   } else {
@@ -255,7 +248,7 @@ void powerUpTubes() {
 }
 
 void powerDownTubes();
-Ticker powerDownTubesTimer(powerDownTubes, 500, 0, MILLIS);
+Ticker powerDownTubesTimer(powerDownTubes, 500, 255, MILLIS);
 void powerDownTubes() {
   const uint8_t currentLevel = getTubeBrightness();
   if (currentLevel == 0) {
@@ -267,13 +260,7 @@ void powerDownTubes() {
 }
 
 void randomNumbers() { transitionToNumber(random(9999), 500); }
-void preventCathodePoisoning() {
-  // Wait for power up to finish
-  if (powerUpTubesTimer.state() != RUNNING) {
-    randomNumbers();
-  }
-}
-Ticker preventCathodePoisoningTimer(preventCathodePoisoning, 5000, 120, MILLIS);
+Ticker preventCathodePoisoningTimer(randomNumbers, 5000, 120, MILLIS);
 
 void setup_OTA() {
   ArduinoOTA.onStart([]() {
@@ -363,8 +350,8 @@ void handleCommands() {
         if (new_brightness < 0) {
           new_brightness = 0;
         }
-        if (new_brightness > 255) {
-          new_brightness = 255;
+        if (new_brightness > maxTubeBrightness) {
+          new_brightness = maxTubeBrightness;
         }
         Serial.printf("New brightness: %d.\n", new_brightness);
         setTubeBrightness(new_brightness);
@@ -414,13 +401,11 @@ void setup() {
 
 #ifndef USE_TELNET_DEBUG
   Serial.begin(115200);
+#else
+  commandServer.begin();
 #endif
 
   connect_to_wifi();
-
-#ifdef USE_TELNET_DEBUG
-  commandServer.begin();
-#endif
 
   setup_OTA();
 
@@ -431,10 +416,12 @@ void setup() {
   // switch HV source on
   pinMode(anodePWMPin, OUTPUT);
   pinMode(hvEnablePin, OUTPUT);
-  delay(20);
+  delay(100);
+  switchHVOn();
+  delay(100);
   setTubeBrightness(averageTubeBrightness);
 
-  // stop all timers to set their status
+  // stop all timers to set their statuses
   powerUpTubesTimer.stop();
   powerDownTubesTimer.stop();
   preventCathodePoisoningTimer.stop();
@@ -447,49 +434,55 @@ void dailyStartUp() {
   powerUpTubesTimer.update();
 
   // Switch tubes on for the day
-  if ((Amsterdam.hour() == START_HOUR) && (!startedToday)) {
-    Serial.println("Powering up tubes for the day...");
-    Serial.print("> ");
-    powerUpTubesTimer.start();
+  if (!startedToday) {
+
+    if ((Amsterdam.hour() >= START_HOUR) && (sleeping)) {
+      Serial.println("Powering up tubes for the day...");
+      Serial.print("> ");
+      powerUpTubesTimer.start();
+      sleeping = false;
+      cathodePreventionToday = false;
+    }
+
+    // wait until tubes are powered up
+    if ((powerUpTubesTimer.state() == RUNNING)) {
+      return;
+    }
+
+    // Run the cathode poisoning prevention routine
+    if ((Amsterdam.hour() >= START_HOUR) && (!cathodePreventionToday)) {
+      Serial.println("Running cathode poisoning prevention routine.");
+      Serial.print("> ");
+      setTubeBrightness(255);
+      preventCathodePoisoningTimer.start();
+      cathodePreventionToday = true;
+    }
+
+    // wait until cathode routine is done
+    if ((preventCathodePoisoningTimer.state() == RUNNING)) {
+      return;
+    } else {
+      // After cathode routine, set tube brightness back to normal
+      setTubeBrightness(averageTubeBrightness);
+    }
+
     startedToday = true;
-    sleeping = false;
-    cathodePreventionToday = false;
-  }
-
-  // wait until tubes are powered up
-  if ((powerUpTubesTimer.state() == RUNNING)) {
-    return;
-  }
-
-  // Run the cathode poisoning prevention routine
-  if ((Amsterdam.hour() == START_HOUR) && (!cathodePreventionToday)) {
-    Serial.println("Running cathode poisoning prevention routine.");
+    Serial.println("Daily start routine finished.");
     Serial.print("> ");
-    setTubeBrightness(255);
-    preventCathodePoisoningTimer.start();
-    cathodePreventionToday = true;
-  }
-
-  // wait until cathode routine is done
-  if ((preventCathodePoisoningTimer.state() == RUNNING)) {
-    return;
-  } else {
-    // After cathode routine, set tube brightness back to normal
-    setTubeBrightness(averageTubeBrightness);
   }
 }
 
 void dailySwitchOff() {
+  powerDownTubesTimer.update();
+
   // Switch tubes off for the night at midnight
-  if ((Amsterdam.hour() == END_HOUR) &&
-      (powerDownTubesTimer.state() != RUNNING)) {
+  if ((Amsterdam.hour() == END_HOUR) && (!sleeping)) {
     Serial.println("Powering down tubes for the night...");
     Serial.print("> ");
     powerDownTubesTimer.start();
     startedToday = false;
     sleeping = true;
   }
-  powerDownTubesTimer.update();
 }
 
 void loop() {
@@ -509,7 +502,7 @@ void loop() {
   dailySwitchOff();
 
   // Day tasks
-  if ((!sleeping) && (preventCathodePoisoningTimer.state() != RUNNING)) {
+  if (startedToday) {
     // Only change display if the time has changed
     if (Amsterdam.minute() != lastMinute) {
       transitionToTime(Amsterdam.hour(), Amsterdam.minute());
