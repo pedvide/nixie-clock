@@ -27,14 +27,14 @@ uint8_t currentDigit1, currentDigit2, currentDigit3, currentDigit4;
 
 // Brightness
 const uint8_t averageTubeBrightness = 127;
-const uint8_t maxTubeBrightness = 230;
+const uint8_t maxTubeBrightness = 200;
 int8_t tubePWMLevel = averageTubeBrightness;
 
 // status
 bool HVisOn = false;
-bool startedToday = false;
-bool sleeping = true;
-bool cathodePreventionToday = false;
+bool startedToday = true;
+bool sleeping = false;
+bool cathodePreventionToday = true;
 uint8_t START_HOUR = 8;
 uint8_t END_HOUR = 23;
 
@@ -417,9 +417,9 @@ void setup() {
   pinMode(anodePWMPin, OUTPUT);
   pinMode(hvEnablePin, OUTPUT);
   delay(100);
+  setTubeBrightness(averageTubeBrightness);
   switchHVOn();
   delay(100);
-  setTubeBrightness(averageTubeBrightness);
 
   // stop all timers to set their statuses
   powerUpTubesTimer.stop();
@@ -436,7 +436,7 @@ void dailyStartUp() {
   // Switch tubes on for the day
   if (!startedToday) {
 
-    if ((Amsterdam.hour() >= START_HOUR) && (sleeping)) {
+    if ((Amsterdam.hour() == START_HOUR) && (sleeping)) {
       Serial.println("Powering up tubes for the day...");
       Serial.print("> ");
       powerUpTubesTimer.start();
@@ -450,7 +450,7 @@ void dailyStartUp() {
     }
 
     // Run the cathode poisoning prevention routine
-    if ((Amsterdam.hour() >= START_HOUR) && (!cathodePreventionToday)) {
+    if ((Amsterdam.hour() == START_HOUR) && (!cathodePreventionToday)) {
       Serial.println("Running cathode poisoning prevention routine.");
       Serial.print("> ");
       setTubeBrightness(255);
