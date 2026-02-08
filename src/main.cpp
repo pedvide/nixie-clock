@@ -246,8 +246,6 @@ bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
                             transitionTime_ms);
 }
 
-void powerUpTubes();
-Ticker powerUpTubesTimer(powerUpTubes, 400, 255, MILLIS);
 void powerUpTubes() {
   const uint8_t currentLevel = getTubeBrightness();
   if (!isHVOn()) {
@@ -261,9 +259,8 @@ void powerUpTubes() {
     setTubeBrightness(currentLevel + 1);
   }
 }
+Ticker powerUpTubesTimer(powerUpTubes, 400, 255, MILLIS);
 
-void powerDownTubes();
-Ticker powerDownTubesTimer(powerDownTubes, 400, 255, MILLIS);
 void powerDownTubes() {
   const uint8_t currentLevel = getTubeBrightness();
   if (currentLevel == 0) {
@@ -274,6 +271,7 @@ void powerDownTubes() {
     setTubeBrightness(currentLevel - 1);
   }
 }
+Ticker powerDownTubesTimer(powerDownTubes, 400, 255, MILLIS);
 
 void randomNumbers() { transitionToNumber(random(9999), 500); }
 Ticker preventCathodePoisoningTimer(randomNumbers, 5000, 120, MILLIS);
