@@ -31,10 +31,17 @@ const uint8_t maxTubeBrightness = 200;
 int8_t tubePWMLevel = averageTubeBrightness;
 
 // status
+enum class State {
+  AWAKE = 0,
+  POWERING_DOWN,
+  SLEEPING,
+  POWERING_UP,
+  CATHODE_PREVENTION
+};
+const char *state_to_string[] = {"AWAKE", "POWERING_DOWN", "SLEEPING",
+                                 "POWERING_UP", "CATHODE_PREVENTION"};
+State current_state = State::AWAKE;
 bool HVisOn = false;
-bool startedToday = true;
-bool sleeping = false;
-bool cathodePreventionToday = true;
 uint8_t START_HOUR = 8;
 uint8_t END_HOUR = 23;
 
@@ -58,6 +65,10 @@ void switchHVOff() {
 bool isHVOn() { return HVisOn; }
 
 void setTubeBrightness(uint8_t brightness) {
+  if (brightness == 0) {
+    switchHVOff();
+  }
+
   if (brightness > maxTubeBrightness) {
     brightness = maxTubeBrightness;
   }
@@ -236,9 +247,13 @@ bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
 }
 
 void powerUpTubes();
-Ticker powerUpTubesTimer(powerUpTubes, 500, 255, MILLIS);
+Ticker powerUpTubesTimer(powerUpTubes, 400, 255, MILLIS);
 void powerUpTubes() {
   const uint8_t currentLevel = getTubeBrightness();
+  if (!isHVOn()) {
+    switchHVOn();
+  }
+
   if (currentLevel >= maxTubeBrightness) {
     Serial.printf("\nTubes fully powered up\n> ");
     powerUpTubesTimer.stop();
@@ -248,12 +263,13 @@ void powerUpTubes() {
 }
 
 void powerDownTubes();
-Ticker powerDownTubesTimer(powerDownTubes, 500, 255, MILLIS);
+Ticker powerDownTubesTimer(powerDownTubes, 400, 255, MILLIS);
 void powerDownTubes() {
   const uint8_t currentLevel = getTubeBrightness();
   if (currentLevel == 0) {
     Serial.printf("\nTubes fully powered down\n> ");
     powerDownTubesTimer.stop();
+    switchHVOff();
   } else {
     setTubeBrightness(currentLevel - 1);
   }
@@ -263,12 +279,7 @@ void randomNumbers() { transitionToNumber(random(9999), 500); }
 Ticker preventCathodePoisoningTimer(randomNumbers, 5000, 120, MILLIS);
 
 void setup_OTA() {
-  ArduinoOTA.onStart([]() {
-    Serial.println("Starting the OTA update.");
-#ifdef USE_TELNET_DEBUG
-    commandClient.stop();
-#endif
-  });
+  ArduinoOTA.onStart([]() { Serial.println("Starting the OTA update."); });
 
   ArduinoOTA.onEnd([]() { Serial.println("Finished the OTA update."); });
 
@@ -355,6 +366,30 @@ void handleCommands() {
         }
         Serial.printf("New brightness: %d.\n", new_brightness);
         setTubeBrightness(new_brightness);
+      } else if (command.startsWith("start")) {
+        command.replace("start ", "");
+        command.trim();
+        int32_t new_start_hour = command.toInt();
+        if (new_start_hour < 0) {
+          new_start_hour = 0;
+        }
+        if (new_start_hour > 23) {
+          new_start_hour = 23;
+        }
+        Serial.printf("New start hour: %d.\n", new_start_hour);
+        START_HOUR = new_start_hour;
+      } else if (command.startsWith("end")) {
+        command.replace("end ", "");
+        command.trim();
+        int32_t new_end_hour = command.toInt();
+        if (new_end_hour < 0) {
+          new_end_hour = 0;
+        }
+        if (new_end_hour > 23) {
+          new_end_hour = 23;
+        }
+        Serial.printf("New end hour: %d.\n", new_end_hour);
+        END_HOUR = new_end_hour;
       } else if (command == "time") {
         transitionToTime(Amsterdam.hour(), Amsterdam.minute());
       } else if (command == "cathode") {
@@ -369,6 +404,12 @@ void handleCommands() {
       } else if (command == "power down") {
         Serial.println("Powering tubes down.");
         powerDownTubesTimer.start();
+      } else if (command == "debug") {
+        Serial.printf("current_state: %s.\n",
+                      state_to_string[static_cast<int>(current_state)]);
+        Serial.printf("HVisOn: %s.\n", HVisOn ? "true" : "false");
+        Serial.printf("start hour: %d.\n", START_HOUR);
+        Serial.printf("end hour: %d.\n", END_HOUR);
       } else if (command == "restart") {
         Serial.println("Restarting!");
         Serial.flush();
@@ -381,8 +422,10 @@ void handleCommands() {
         }
         Serial.println("Available commands: 'help', 'hv on', 'hv off', "
                        "'(br)ightness <0-255>', 'time', "
+                       "'start <hour>', 'end <hour>',"
                        "'cathode', 'cathode stop', "
-                       "'power down', 'power up', 'restart'.");
+                       "'power down', 'power up', "
+                       "'debug', 'restart'.");
       }
       Serial.print("> ");
     }
@@ -417,8 +460,8 @@ void setup() {
   pinMode(anodePWMPin, OUTPUT);
   pinMode(hvEnablePin, OUTPUT);
   delay(100);
-  setTubeBrightness(averageTubeBrightness);
   switchHVOn();
+  setTubeBrightness(averageTubeBrightness);
   delay(100);
 
   // stop all timers to set their statuses
@@ -429,65 +472,62 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH); // end of setup
 }
 
-void dailyStartUp() {
-  preventCathodePoisoningTimer.update();
-  powerUpTubesTimer.update();
-
-  // Switch tubes on for the day
-  if (!startedToday) {
-
-    if ((Amsterdam.hour() == START_HOUR) && (sleeping)) {
-      Serial.println("Powering up tubes for the day...");
-      Serial.print("> ");
-      powerUpTubesTimer.start();
-      sleeping = false;
-      cathodePreventionToday = false;
-    }
-
-    // wait until tubes are powered up
-    if ((powerUpTubesTimer.state() == RUNNING)) {
-      return;
-    }
-
-    // Run the cathode poisoning prevention routine
-    if ((Amsterdam.hour() == START_HOUR) && (!cathodePreventionToday)) {
-      Serial.println("Running cathode poisoning prevention routine.");
-      Serial.print("> ");
-      setTubeBrightness(255);
-      preventCathodePoisoningTimer.start();
-      cathodePreventionToday = true;
-    }
-
-    // wait until cathode routine is done
-    if ((preventCathodePoisoningTimer.state() == RUNNING)) {
-      return;
-    } else {
-      // After cathode routine, set tube brightness back to normal
-      setTubeBrightness(averageTubeBrightness);
-    }
-
-    startedToday = true;
-    Serial.println("Daily start routine finished.");
-    Serial.print("> ");
+void awake() {
+  // Only change display if the time has changed
+  if (Amsterdam.minute() != lastMinute) {
+    transitionToTime(Amsterdam.hour(), Amsterdam.minute());
+    lastMinute = Amsterdam.minute();
   }
-}
 
-void dailySwitchOff() {
-  powerDownTubesTimer.update();
-
-  // Switch tubes off for the night at midnight
-  if ((Amsterdam.hour() == END_HOUR) && (!sleeping)) {
+  if (Amsterdam.hour() == END_HOUR) {
     Serial.println("Powering down tubes for the night...");
     Serial.print("> ");
     powerDownTubesTimer.start();
-    startedToday = false;
-    sleeping = true;
+    current_state = State::POWERING_DOWN;
+  }
+}
+
+void powering_down() {
+  if (powerDownTubesTimer.state() != RUNNING) {
+    current_state = State::SLEEPING;
+  }
+}
+
+void sleeping() {
+  if (Amsterdam.hour() == START_HOUR) {
+    Serial.println("Powering up tubes for the day...");
+    Serial.print("> ");
+    powerUpTubesTimer.start();
+    current_state = State::POWERING_UP;
+  }
+}
+
+void powering_up() {
+  if (powerUpTubesTimer.state() != RUNNING) {
+    Serial.println("Running cathode poisoning prevention routine.");
+    Serial.print("> ");
+    setTubeBrightness(255);
+    preventCathodePoisoningTimer.start();
+    current_state = State::CATHODE_PREVENTION;
+  }
+}
+
+void cathode_prevention() {
+  if (preventCathodePoisoningTimer.state() != RUNNING) {
+    // After cathode routine, set tube brightness back to normal
+    setTubeBrightness(averageTubeBrightness);
+    Serial.println("Daily start routine finished.");
+    Serial.print("> ");
+    current_state = State::AWAKE;
   }
 }
 
 void loop() {
   // Update time library events
   events();
+  powerDownTubesTimer.update();
+  preventCathodePoisoningTimer.update();
+  powerUpTubesTimer.update();
 
   // Deal with OTA
   ArduinoOTA.handle();
@@ -497,16 +537,21 @@ void loop() {
   handleCommands();
 #endif
 
-  dailyStartUp();
-
-  dailySwitchOff();
-
-  // Day tasks
-  if (startedToday) {
-    // Only change display if the time has changed
-    if (Amsterdam.minute() != lastMinute) {
-      transitionToTime(Amsterdam.hour(), Amsterdam.minute());
-      lastMinute = Amsterdam.minute();
-    }
+  switch (current_state) {
+  case State::AWAKE:
+    awake();
+    break;
+  case State::CATHODE_PREVENTION:
+    cathode_prevention();
+    break;
+  case State::POWERING_DOWN:
+    powering_down();
+    break;
+  case State::SLEEPING:
+    sleeping();
+    break;
+  case State::POWERING_UP:
+    powering_up();
+    break;
   }
 }
