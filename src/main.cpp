@@ -3,6 +3,7 @@
 #include "LittleFS.h"
 #include <Arduino.h>
 #include <ArduinoOTA.h>
+#include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <Ticker.h>
 #include <ezTime.h>
@@ -13,6 +14,14 @@
 const char *ssid PROGMEM = STASSID;
 const char *password PROGMEM = STAPSK;
 const char *hostname = "nixie-clock";
+
+// EEPROM
+// write after ezTime library cache
+const uint16_t EEPROM_MAIN_START_ADDR = EEPROM_CACHE_LEN;
+const uint16_t EEPROM_MAIN_LEN = 16;
+const uint16_t EEPROM_MAIN_SIZE = EEPROM_MAIN_START_ADDR + EEPROM_MAIN_LEN;
+const uint16_t EEPROM_MAIN_END_ADDR =
+    EEPROM_MAIN_START_ADDR + EEPROM_MAIN_LEN - 1;
 
 //// Time
 Timezone Amsterdam;
@@ -29,8 +38,8 @@ const uint8_t anodePWMPin = D0;
 uint8_t currentDigit1, currentDigit2, currentDigit3, currentDigit4;
 
 // Brightness
-const uint8_t averageTubeBrightness = 127;
-const uint8_t maxTubeBrightness = 200;
+uint8_t averageTubeBrightness = 127;
+const uint8_t maxTubeBrightness = 255;
 int8_t tubePWMLevel = averageTubeBrightness;
 
 // status
@@ -432,7 +441,7 @@ Free RAM: <span id="freeRAM"></span> kB, largest contiguous: <span id="contiguou
 )=====";
 
 void setup_web_server() {
-  Serial.println("setup_server");
+  Serial.print("Setting up web server...");
 
   // Web server
   web_server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -521,72 +530,57 @@ void setup_web_server() {
   Serial.println("  done.");
 }
 
-void listAllFilesInDir(String dir_path) {
-  Serial.println("Listing all files");
-  Dir dir = LittleFS.openDir(dir_path);
-  while (dir.next()) {
-    if (dir.isFile()) {
-      // print file names
-      Serial.print("File: ");
-      Serial.print(dir_path + dir.fileName());
-      File file = dir.openFile("r");
-      if (file) {
-        size_t fileSize = file.size();
-        const char *unit;
-        if (fileSize > 500) {
-          fileSize /= 1024;
-          unit = "kB";
-        } else {
-          unit = "B";
-        }
-        Serial.printf(", size: %d%s\n", fileSize, unit);
-        file.close();
-      } else {
-        Serial.println("Failed opening the file");
-      }
-    }
-    if (dir.isDirectory()) {
-      // print directory names
-      Serial.print("Dir: ");
-      Serial.println(dir_path + dir.fileName() + "/");
-      // recursive file listing inside new directory
-      listAllFilesInDir(dir_path + dir.fileName() + "/");
-    }
+uint8_t checksum_eeprom_cache() {
+  // Add all bytes in cache % 256 and add 42, that is the checksum written to
+  // last byte. The 42 is because then checksum of all zeroes then isn't
+  uint8_t checksum = 0;
+  for (uint16_t addr = EEPROM_MAIN_START_ADDR; addr < EEPROM_MAIN_END_ADDR;
+       addr++) {
+    checksum += EEPROM.read(addr);
   }
+  checksum += 42;
+  return checksum;
 }
 
-void readFile(const char *path) {
-  Serial.printf("Reading file: %s\n", path);
-
-  File file = LittleFS.open(path, "r");
-  if (!file) {
-    Serial.println("Failed to open file for reading");
-    return;
+bool read_stored_settings() {
+  // for (int16_t addr = EEPROM_MAIN_START_ADDR; addr <= EEPROM_MAIN_END_ADDR;
+  //      addr++) {
+  //   Serial.printf("EEPROM[%d] = %d\n", addr, EEPROM.read(addr));
+  // }
+  uint8_t checksum = checksum_eeprom_cache();
+  if (checksum != EEPROM.read(EEPROM_MAIN_END_ADDR)) {
+    return false;
   }
 
-  Serial.print("Read from file: ");
-  while (file.available()) {
-    Serial.write(file.read());
-  }
-  Serial.println();
-  file.close();
+  averageTubeBrightness = EEPROM.read(EEPROM_MAIN_START_ADDR);
+  START_HOUR = EEPROM.read(EEPROM_MAIN_START_ADDR + 1);
+  END_HOUR = EEPROM.read(EEPROM_MAIN_START_ADDR + 2);
+
+  return true;
 }
 
-void writeFile(const char *path, const char *message) {
-  Serial.printf("Writing file: %s\n", path);
+void store_settings() {
+  uint16_t addr = EEPROM_MAIN_START_ADDR;
 
-  File file = LittleFS.open(path, "w");
-  if (!file) {
-    Serial.println("Failed to open file for writing");
-    return;
+  // write settings
+  EEPROM.write(addr++, averageTubeBrightness);
+  EEPROM.write(addr++, START_HOUR);
+  EEPROM.write(addr++, END_HOUR);
+
+  // fill up the rest of the cache (except last byte) with 0s
+  for (; addr < EEPROM_MAIN_END_ADDR; addr++) {
+    EEPROM.write(addr, 0);
   }
-  if (file.print(message)) {
-    Serial.println("File written");
+
+  uint8_t checksum = checksum_eeprom_cache();
+  // write checksum last
+  EEPROM.write(EEPROM_MAIN_END_ADDR, checksum);
+
+  if (EEPROM.commit()) {
+    Serial.println("EEPROM successfully committed");
   } else {
-    Serial.println("Write failed");
+    Serial.println("ERROR! EEPROM commit failed");
   }
-  delay(100); // Make sure the CREATE and LASTWRITE times are different
-  file.close();
 }
 
 void setup() {
@@ -599,15 +593,22 @@ void setup() {
   pinMode(dataPin, OUTPUT);
 
   Serial.begin(115200);
+  EEPROM.begin(EEPROM_MAIN_SIZE);
 
   LittleFS.begin();
 
-  Serial.printf("Last restart due to %s.", ESP.getResetReason().c_str());
+  Serial.printf("Last restart due to %s.\n", ESP.getResetReason().c_str());
   Serial.printf("CPU freq: %d MHz, Flash size: %d kB, Sketch size: %d kB "
-                "(free: %d kB), Free RAM: %d kB.",
+                "(free: %d kB), Free RAM: %d kB.\n",
                 ESP.getCpuFreqMHz(), ESP.getFlashChipRealSize() / 1024,
                 ESP.getSketchSize() / 1024, ESP.getFreeSketchSpace() / 1024,
                 ESP.getFreeHeap() / 1024);
+
+  if (!read_stored_settings()) {
+    Serial.print("Invalid data in EEPROM cache. Writing default settings...");
+    store_settings();
+    Serial.println(" done!");
+  }
 
   connect_to_wifi();
 
