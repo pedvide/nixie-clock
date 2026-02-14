@@ -1,3 +1,6 @@
+#include "ESPAsyncTCP.h"
+#include "ESPAsyncWebServer.h"
+#include "LittleFS.h"
 #include <Arduino.h>
 #include <ArduinoOTA.h>
 #include <ESP8266WiFi.h>
@@ -45,12 +48,7 @@ bool HVisOn = false;
 uint8_t START_HOUR = 8;
 uint8_t END_HOUR = 23;
 
-#ifdef USE_TELNET_DEBUG
-///// Command server
-WiFiServer commandServer(23);
-WiFiClient commandClient;
-#define Serial commandClient
-#endif
+bool isHVOn() { return HVisOn; }
 
 void switchHVOn() {
   digitalWrite(hvEnablePin, HIGH);
@@ -61,8 +59,6 @@ void switchHVOff() {
   digitalWrite(hvEnablePin, LOW);
   HVisOn = false;
 }
-
-bool isHVOn() { return HVisOn; }
 
 void setTubeBrightness(uint8_t brightness) {
   if (brightness == 0) {
@@ -246,6 +242,8 @@ bool transitionToTime(uint8_t toHours, uint8_t toMinutes,
                             transitionTime_ms);
 }
 
+void powerUpTubes();
+Ticker powerUpTubesTimer(powerUpTubes, 400, 255, MILLIS);
 void powerUpTubes() {
   const uint8_t currentLevel = getTubeBrightness();
   if (!isHVOn()) {
@@ -259,8 +257,9 @@ void powerUpTubes() {
     setTubeBrightness(currentLevel + 1);
   }
 }
-Ticker powerUpTubesTimer(powerUpTubes, 400, 255, MILLIS);
 
+void powerDownTubes();
+Ticker powerDownTubesTimer(powerDownTubes, 400, 255, MILLIS);
 void powerDownTubes() {
   const uint8_t currentLevel = getTubeBrightness();
   if (currentLevel == 0) {
@@ -271,7 +270,6 @@ void powerDownTubes() {
     setTubeBrightness(currentLevel - 1);
   }
 }
-Ticker powerDownTubesTimer(powerDownTubes, 400, 255, MILLIS);
 
 void randomNumbers() { transitionToNumber(random(9999), 500); }
 Ticker preventCathodePoisoningTimer(randomNumbers, 5000, 120, MILLIS);
@@ -313,123 +311,283 @@ void setup_OTA() {
   Serial.println("OTA enabled.");
 }
 
-#ifdef USE_TELNET_DEBUG
-bool justConnected = true;
-void handleCommands() {
-  if (commandServer.hasClient()) {
-    // client is connected
-    if (!commandClient || !commandClient.connected()) {
-      if (commandClient) {
-        commandClient.stop(); // client disconnected
-        justConnected = true;
-      }
-      commandClient = commandServer.accept(); // ready for new client
-    } else {
-      commandServer.accept().stop(); // have client, block new conections
-      justConnected = true;
-    }
-  }
+//// Web Server
+AsyncWebServer web_server(80);
+bool requested_restart = false;
+const char web_server_html_header[] PROGMEM = R"=====(
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" type="text/css" href="style.css">
+<script>
+let data = %s;
+document.addEventListener("DOMContentLoaded", (event) => {
+  document.getElementById("currentMode").textContent = data.currentState;
+  document.getElementById("digit1").textContent = data.currentDigit1;
+  document.getElementById("digit2").textContent = data.currentDigit2;
+  document.getElementById("digit3").textContent = data.currentDigit3;
+  document.getElementById("digit4").textContent = data.currentDigit4;
+  document.getElementById("freeRAM").textContent = data.hFree;
+  document.getElementById("contiguousRAM").textContent = data.hMax;
+  document.getElementById("fragmentedRAM").textContent = data.hFrag;
 
-  if (commandClient && commandClient.connected()) {
-    // On first connection
-    if (justConnected) {
-      Serial.println("Nixie tube clock (type help for commands)");
-      Serial.print("> ");
-    }
-    justConnected = false;
+  const startTime = document.getElementById("start-time");
+  startTime.value = data.startHour.toString().padStart(2, "0") + ":00";
+  startTime.addEventListener("input", (event) => {
+    data.startHour = parseInt(event.target.value.substring(0,2));
+    fetch(`http://${data.hostname}/settings`, 
+      {method: "POST", 
+      body: new URLSearchParams({
+            'startHour': data.startHour
+            })
+      })
+  });
 
-    // client input processing
-    while (commandClient.available()) {
-      String command = commandClient.readStringUntil('\n');
-      command.trim();
-      // Serial.println(command);
-      if (command == "hv on") {
-        Serial.println("Switching HV on.");
+  const endTime = document.getElementById("end-time");
+  endTime.value = data.endHour.toString().padStart(2, "0") + ":00";
+  endTime.addEventListener("input", (event) => {
+    data.endHour = parseInt(event.target.value.substring(0,2));
+    fetch(`http://${data.hostname}/settings`, 
+      {method: "POST", 
+      body: new URLSearchParams({
+            'endHour': data.endHour
+            })
+      })
+  });
+
+  const brightness = document.getElementById("brightness");
+  brightness.value = data.brightness.toString();
+  const brightnessValue = document.getElementById("brightness-value");
+  brightnessValue.textContent = brightness.value;
+  brightness.addEventListener("input", (event) => {
+    brightnessValue.textContent = event.target.value;
+    data.brightness = event.target.value;
+    fetch(`http://${data.hostname}/settings`, 
+      {method: "POST", 
+      body: new URLSearchParams({
+            'brightness': event.target.value
+            })
+      })
+  });
+
+  const hvToggle = document.getElementById("hvBtnToggle");
+  hvToggle.checked = data.isHVon? true: false;
+  hvToggle.addEventListener("input", (event) => {
+    data.isHVOn = event.target.checked;
+    fetch(`http://${data.hostname}/settings`, 
+      {method: "POST", 
+      body: new URLSearchParams({
+            'isHVOn': event.target.checked
+            })
+      })
+  });
+});
+</script>
+<title>Nixie clock</title>
+</head>
+<body>
+<header>
+<h1>Nixie clock</h1>
+<div class="button-bar">
+  <div class="button-holder">
+    <button class='button' id='btn-restart' onclick="fetch(`http://${data.hostname}/restart`)">Restart</button>
+  </div>
+  <div class="button-holder">
+    <button class='button' id='btn-blink' onclick="fetch(`http://${data.hostname}/blink`)">Blink</button>
+  </div>
+</div>
+</header>
+<main>
+<form>
+  <label>
+    Wake up time:
+    <input id="start-time" type="time" name="start-time" required>
+  </label>
+  <label>
+    Sleep time:
+    <input id="end-time" type="time" name="end-time" required>
+  </label>
+  <div>
+    <label class="hvToggle">
+      <input type="checkbox" id="hvBtnToggle" name="hvBtnToggle">
+      <span class="hvSlider"></span>
+    </label>
+    <label for="brightness"></label>
+      <input type="range" id="brightness" name="brightness" min="0" max="255">
+      <output id="brightness-value">116</output>
+  </div>
+</form>
+
+Current Mode: <span id="currentMode"></span>.<br>
+Digits: <span id="digit1"></span> <span id="digit2"></span> <span id="digit3"></span> <span id="digit4"></span>.<br>
+Free RAM: <span id="freeRAM"></span> kB, largest contiguous: <span id="contiguousRAM"></span> kB (fragmentation: <span id="fragmentedRAM"></span>%%).<br>
+</main>
+<footer>
+</footer>
+</body>
+</html>
+)=====";
+
+void setup_web_server() {
+  Serial.println("setup_server");
+
+  // Web server
+  web_server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    AsyncResponseStream *response = request->beginResponseStream("text/html");
+    uint32_t hfree = 0;
+    uint32_t hmax = 0;
+    uint8_t hfrag = 0;
+    ESP.getHeapStats(&hfree, &hmax, &hfrag);
+
+    char json_buffer[1000];
+    const char json_string[] = R"=====(
+    {
+    hostname: "%s",
+    currentState: "%s",
+    currentDigit1: %d,
+    currentDigit2: %d,
+    currentDigit3: %d,
+    currentDigit4: %d,
+    brightness: %d,
+    isHVon: %d,
+    startHour: %d,
+    endHour: %d,
+    hFree: %d,
+    hMax: %d,
+    hFrag: %d
+    }
+    )=====";
+
+    snprintf(json_buffer, sizeof json_buffer, json_string, hostname,
+             state_to_string[static_cast<int>(current_state)], currentDigit1,
+             currentDigit2, currentDigit3, currentDigit4, getTubeBrightness(),
+             isHVOn(), START_HOUR, END_HOUR, hfree / 1024, hmax / 1024, hfrag);
+
+    response->printf_P(web_server_html_header, json_buffer);
+    request->send(response);
+  });
+
+  web_server.serveStatic("/style.css", LittleFS, "/style.css")
+      .setCacheControl("max-age=600");
+
+  web_server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
+    requested_restart = true;
+    request->send(200, F("text/plain"), F("Ok"));
+  });
+
+  web_server.on("/blink", HTTP_GET, [](AsyncWebServerRequest *request) {
+    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+    request->send(200, F("text/plain"), F("Ok"));
+  });
+
+  web_server.on("/health", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, F("text/plain"), F("Ok"));
+  });
+
+  web_server.on("/settings", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (request->hasParam("startHour", true)) {
+      AsyncWebParameter *p = request->getParam("startHour", true);
+      START_HOUR = p->value().toInt();
+    }
+    if (request->hasParam("endHour", true)) {
+      AsyncWebParameter *p = request->getParam("endHour", true);
+      END_HOUR = p->value().toInt();
+    }
+    if (request->hasParam("brightness", true)) {
+      AsyncWebParameter *p = request->getParam("brightness", true);
+      setTubeBrightness(p->value().toInt());
+    }
+    if (request->hasParam("isHVOn", true)) {
+      AsyncWebParameter *p = request->getParam("isHVOn", true);
+      if (p->value() == "true") {
         switchHVOn();
-      } else if (command == "hv off") {
-        Serial.println("Switching HV off.");
-        switchHVOff();
-      } else if ((command == "brightness") || (command == "br")) {
-        Serial.printf("brightness: %d.\n", getTubeBrightness());
-      } else if (command.startsWith("brightness") || command.startsWith("br")) {
-        command.replace("brightness ", "");
-        command.replace("br ", "");
-        command.trim();
-        int32_t new_brightness = command.toInt();
-        if (new_brightness < 0) {
-          new_brightness = 0;
-        }
-        if (new_brightness > maxTubeBrightness) {
-          new_brightness = maxTubeBrightness;
-        }
-        Serial.printf("New brightness: %d.\n", new_brightness);
-        setTubeBrightness(new_brightness);
-      } else if (command.startsWith("start")) {
-        command.replace("start ", "");
-        command.trim();
-        int32_t new_start_hour = command.toInt();
-        if (new_start_hour < 0) {
-          new_start_hour = 0;
-        }
-        if (new_start_hour > 23) {
-          new_start_hour = 23;
-        }
-        Serial.printf("New start hour: %d.\n", new_start_hour);
-        START_HOUR = new_start_hour;
-      } else if (command.startsWith("end")) {
-        command.replace("end ", "");
-        command.trim();
-        int32_t new_end_hour = command.toInt();
-        if (new_end_hour < 0) {
-          new_end_hour = 0;
-        }
-        if (new_end_hour > 23) {
-          new_end_hour = 23;
-        }
-        Serial.printf("New end hour: %d.\n", new_end_hour);
-        END_HOUR = new_end_hour;
-      } else if (command == "time") {
-        transitionToTime(Amsterdam.hour(), Amsterdam.minute());
-      } else if (command == "cathode") {
-        Serial.println("Running cathode poisoning prevention routine.");
-        preventCathodePoisoningTimer.start();
-      } else if (command == "cathode stop") {
-        Serial.println("Stopping cathode poisoning prevention routine.");
-        preventCathodePoisoningTimer.stop();
-      } else if (command == "power up") {
-        Serial.println("Powering tubes up.");
-        powerUpTubesTimer.start();
-      } else if (command == "power down") {
-        Serial.println("Powering tubes down.");
-        powerDownTubesTimer.start();
-      } else if (command == "debug") {
-        Serial.printf("current_state: %s.\n",
-                      state_to_string[static_cast<int>(current_state)]);
-        Serial.printf("HVisOn: %s.\n", HVisOn ? "true" : "false");
-        Serial.printf("start hour: %d.\n", START_HOUR);
-        Serial.printf("end hour: %d.\n", END_HOUR);
-      } else if (command == "restart") {
-        Serial.println("Restarting!");
-        Serial.flush();
-        delay(10);
-        commandClient.stop();
-        ESP.restart();
       } else {
-        if (command != "help") {
-          Serial.println("Command not recognized!");
-        }
-        Serial.println("Available commands: 'help', 'hv on', 'hv off', "
-                       "'(br)ightness <0-255>', 'time', "
-                       "'start <hour>', 'end <hour>',"
-                       "'cathode', 'cathode stop', "
-                       "'power down', 'power up', "
-                       "'debug', 'restart'.");
+        switchHVOff();
       }
-      Serial.print("> ");
+    }
+    request->send(200, F("text/plain"), F("Ok"));
+  });
+
+  web_server.onNotFound([](AsyncWebServerRequest *request) {
+    Serial.println(F("404."));
+    request->send(404, F("text/plain"), F("Not found"));
+  });
+
+  // Start server
+  web_server.begin();
+  Serial.println("  done.");
+}
+
+void listAllFilesInDir(String dir_path) {
+  Serial.println("Listing all files");
+  Dir dir = LittleFS.openDir(dir_path);
+  while (dir.next()) {
+    if (dir.isFile()) {
+      // print file names
+      Serial.print("File: ");
+      Serial.print(dir_path + dir.fileName());
+      File file = dir.openFile("r");
+      if (file) {
+        size_t fileSize = file.size();
+        const char *unit;
+        if (fileSize > 500) {
+          fileSize /= 1024;
+          unit = "kB";
+        } else {
+          unit = "B";
+        }
+        Serial.printf(", size: %d%s\n", fileSize, unit);
+        file.close();
+      } else {
+        Serial.println("Failed opening the file");
+      }
+    }
+    if (dir.isDirectory()) {
+      // print directory names
+      Serial.print("Dir: ");
+      Serial.println(dir_path + dir.fileName() + "/");
+      // recursive file listing inside new directory
+      listAllFilesInDir(dir_path + dir.fileName() + "/");
     }
   }
 }
-#endif
+
+void readFile(const char *path) {
+  Serial.printf("Reading file: %s\n", path);
+
+  File file = LittleFS.open(path, "r");
+  if (!file) {
+    Serial.println("Failed to open file for reading");
+    return;
+  }
+
+  Serial.print("Read from file: ");
+  while (file.available()) {
+    Serial.write(file.read());
+  }
+  Serial.println();
+  file.close();
+}
+
+void writeFile(const char *path, const char *message) {
+  Serial.printf("Writing file: %s\n", path);
+
+  File file = LittleFS.open(path, "w");
+  if (!file) {
+    Serial.println("Failed to open file for writing");
+    return;
+  }
+  if (file.print(message)) {
+    Serial.println("File written");
+  } else {
+    Serial.println("Write failed");
+  }
+  delay(100); // Make sure the CREATE and LASTWRITE times are different
+  file.close();
+}
 
 void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
@@ -440,13 +598,20 @@ void setup() {
   pinMode(clockPin, OUTPUT);
   pinMode(dataPin, OUTPUT);
 
-#ifndef USE_TELNET_DEBUG
   Serial.begin(115200);
-#else
-  commandServer.begin();
-#endif
+
+  LittleFS.begin();
+
+  Serial.printf("Last restart due to %s.", ESP.getResetReason().c_str());
+  Serial.printf("CPU freq: %d MHz, Flash size: %d kB, Sketch size: %d kB "
+                "(free: %d kB), Free RAM: %d kB.",
+                ESP.getCpuFreqMHz(), ESP.getFlashChipRealSize() / 1024,
+                ESP.getSketchSize() / 1024, ESP.getFreeSketchSpace() / 1024,
+                ESP.getFreeHeap() / 1024);
 
   connect_to_wifi();
+
+  setup_web_server();
 
   setup_OTA();
 
@@ -530,10 +695,9 @@ void loop() {
   // Deal with OTA
   ArduinoOTA.handle();
 
-  // Handle user commands
-#ifdef USE_TELNET_DEBUG
-  handleCommands();
-#endif
+  if (requested_restart) {
+    ESP.restart();
+  }
 
   switch (current_state) {
   case State::AWAKE:

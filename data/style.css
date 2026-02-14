@@ -1,0 +1,153 @@
+:root {
+  --yellow-color: #f9ed89db;
+}
+
+body {
+  margin: auto;
+  padding: 0px 1em;
+  width: 960px;
+}
+
+@media only screen and (max-width: 960px) {
+  body {
+    width: 100%;
+  }
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2em;
+}
+
+main {
+  margin-bottom: 2em;
+}
+
+footer {
+  margin-bottom: 2em;
+}
+
+
+a.button,
+button.button {
+  background-color: #555555;
+  /* gray */
+  border: none;
+  color: white;
+  padding: 0.25em 1em;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 1.2em;
+}
+
+#btn-restart.button {
+  background-color: #f44336;
+}
+
+/* red */
+#btn-restart.button:hover {
+  background-color: #555555;
+}
+
+#btn-blink.button {
+  background-color: #008cba;
+}
+
+/* blue */
+#btn-blink.button:hover {
+  background-color: #555555;
+}
+
+div.button-bar {
+  display: flex;
+  justify-content: space-evenly;
+}
+
+@media only screen and (max-width: 960px) {
+  div.button-bar {
+    flex-direction: column;
+    align-items: center;
+    justify-content: unset;
+  }
+}
+
+div.button-holder {
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+  margin: 5px 5px;
+}
+
+input[type="range"] {
+  vertical-align: middle;
+  appearance: none;
+  background: linear-gradient(45deg in hsl, black, var(--yellow-color));
+  border-radius: 10px;
+  height: 18px;
+  opacity: 0.8;
+  transition: opacity .2s;
+}
+
+input[type="range"]:hover {
+  opacity: 1;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.hvToggle {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 20px;
+  vertical-align: middle;
+}
+
+.hvToggle input {
+  display: none;
+}
+
+.hvSlider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #333;
+  transition: 0.4s;
+
+  border-radius: 20px;
+  border-color: black;
+  border-top-width: 2px;
+  border-top-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-style: solid;
+  border-left-width: 2px;
+  border-left-style: solid;
+  border-right-width: 2px;
+  border-right-style: solid;
+}
+
+.hvSlider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 0px;
+  bottom: 0px;
+  background-color: #FFF;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+.hvToggle input:checked+.hvSlider {
+  background-color: var(--yellow-color);
+}
+
+.hvToggle input:checked+.hvSlider:before {
+  transform: translateX(20px);
+}
