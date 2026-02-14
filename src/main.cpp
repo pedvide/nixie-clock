@@ -57,6 +57,65 @@ bool HVisOn = false;
 uint8_t START_HOUR = 8;
 uint8_t END_HOUR = 23;
 
+uint8_t checksum_eeprom_cache() {
+  // Add all bytes in cache % 256 and add 42, that is the checksum written to
+  // last byte. The 42 is because then checksum of all zeroes then isn't zero
+  uint8_t checksum = 0;
+  for (uint16_t addr = EEPROM_MAIN_START_ADDR; addr < EEPROM_MAIN_END_ADDR;
+       addr++) {
+    checksum += EEPROM.read(addr);
+  }
+  checksum += 42;
+  return checksum;
+}
+
+bool read_stored_settings() {
+  // for (int16_t addr = EEPROM_MAIN_START_ADDR; addr <= EEPROM_MAIN_END_ADDR;
+  //      addr++) {
+  //   Serial.printf("EEPROM[%d] = %d\n", addr, EEPROM.read(addr));
+  // }
+  uint8_t checksum = checksum_eeprom_cache();
+  if (checksum != EEPROM.read(EEPROM_MAIN_END_ADDR)) {
+    return false;
+  }
+
+  averageTubeBrightness = EEPROM.read(EEPROM_MAIN_START_ADDR);
+  START_HOUR = EEPROM.read(EEPROM_MAIN_START_ADDR + 1);
+  END_HOUR = EEPROM.read(EEPROM_MAIN_START_ADDR + 2);
+
+  Serial.println("Settings correctly read from cache");
+  Serial.printf("Brightness: %d, START_HOUR: %d, END_HOUR%d.\n",
+                averageTubeBrightness, START_HOUR, END_HOUR);
+
+  return true;
+}
+
+void store_settings() {
+  EEPROM.begin(EEPROM_MAIN_SIZE);
+
+  uint16_t addr = EEPROM_MAIN_START_ADDR;
+
+  // write settings
+  EEPROM.write(addr++, averageTubeBrightness);
+  EEPROM.write(addr++, START_HOUR);
+  EEPROM.write(addr++, END_HOUR);
+
+  // fill up the rest of the cache (except last byte) with 0s
+  for (; addr < EEPROM_MAIN_END_ADDR; addr++) {
+    EEPROM.write(addr, 0);
+  }
+
+  uint8_t checksum = checksum_eeprom_cache();
+  // write checksum last
+  EEPROM.write(EEPROM_MAIN_END_ADDR, checksum);
+
+  if (EEPROM.commit()) {
+    Serial.println("EEPROM successfully committed");
+  } else {
+    Serial.println("ERROR! EEPROM commit failed");
+  }
+}
+
 bool isHVOn() { return HVisOn; }
 
 void switchHVOn() {
@@ -497,17 +556,30 @@ void setup_web_server() {
   });
 
   web_server.on("/settings", HTTP_POST, [](AsyncWebServerRequest *request) {
+    bool settingsChanged = false;
     if (request->hasParam("startHour", true)) {
       AsyncWebParameter *p = request->getParam("startHour", true);
-      START_HOUR = p->value().toInt();
+      const int readInt = p->value().toInt();
+      if (START_HOUR != readInt) {
+        START_HOUR = readInt;
+        settingsChanged = true;
+      }
     }
     if (request->hasParam("endHour", true)) {
       AsyncWebParameter *p = request->getParam("endHour", true);
-      END_HOUR = p->value().toInt();
+      const int readInt = p->value().toInt();
+      if (END_HOUR != readInt) {
+        END_HOUR = readInt;
+        settingsChanged = true;
+      }
     }
     if (request->hasParam("brightness", true)) {
       AsyncWebParameter *p = request->getParam("brightness", true);
-      setTubeBrightness(p->value().toInt());
+      const int readInt = p->value().toInt();
+      if (getTubeBrightness() != readInt) {
+        setTubeBrightness(readInt);
+        settingsChanged = true;
+      }
     }
     if (request->hasParam("isHVOn", true)) {
       AsyncWebParameter *p = request->getParam("isHVOn", true);
@@ -516,6 +588,10 @@ void setup_web_server() {
       } else {
         switchHVOff();
       }
+    }
+    if (settingsChanged) {
+      // save settings to EEPROM
+      store_settings();
     }
     request->send(200, F("text/plain"), F("Ok"));
   });
@@ -528,59 +604,6 @@ void setup_web_server() {
   // Start server
   web_server.begin();
   Serial.println("  done.");
-}
-
-uint8_t checksum_eeprom_cache() {
-  // Add all bytes in cache % 256 and add 42, that is the checksum written to
-  // last byte. The 42 is because then checksum of all zeroes then isn't
-  uint8_t checksum = 0;
-  for (uint16_t addr = EEPROM_MAIN_START_ADDR; addr < EEPROM_MAIN_END_ADDR;
-       addr++) {
-    checksum += EEPROM.read(addr);
-  }
-  checksum += 42;
-  return checksum;
-}
-
-bool read_stored_settings() {
-  // for (int16_t addr = EEPROM_MAIN_START_ADDR; addr <= EEPROM_MAIN_END_ADDR;
-  //      addr++) {
-  //   Serial.printf("EEPROM[%d] = %d\n", addr, EEPROM.read(addr));
-  // }
-  uint8_t checksum = checksum_eeprom_cache();
-  if (checksum != EEPROM.read(EEPROM_MAIN_END_ADDR)) {
-    return false;
-  }
-
-  averageTubeBrightness = EEPROM.read(EEPROM_MAIN_START_ADDR);
-  START_HOUR = EEPROM.read(EEPROM_MAIN_START_ADDR + 1);
-  END_HOUR = EEPROM.read(EEPROM_MAIN_START_ADDR + 2);
-
-  return true;
-}
-
-void store_settings() {
-  uint16_t addr = EEPROM_MAIN_START_ADDR;
-
-  // write settings
-  EEPROM.write(addr++, averageTubeBrightness);
-  EEPROM.write(addr++, START_HOUR);
-  EEPROM.write(addr++, END_HOUR);
-
-  // fill up the rest of the cache (except last byte) with 0s
-  for (; addr < EEPROM_MAIN_END_ADDR; addr++) {
-    EEPROM.write(addr, 0);
-  }
-
-  uint8_t checksum = checksum_eeprom_cache();
-  // write checksum last
-  EEPROM.write(EEPROM_MAIN_END_ADDR, checksum);
-
-  if (EEPROM.commit()) {
-    Serial.println("EEPROM successfully committed");
-  } else {
-    Serial.println("ERROR! EEPROM commit failed");
-  }
 }
 
 void setup() {
@@ -609,6 +632,7 @@ void setup() {
     store_settings();
     Serial.println(" done!");
   }
+  EEPROM.end();
 
   connect_to_wifi();
 
