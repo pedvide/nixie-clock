@@ -54,8 +54,12 @@ const char *state_to_string[] = {"AWAKE", "POWERING_DOWN", "SLEEPING",
                                  "POWERING_UP", "CATHODE_PREVENTION"};
 State current_state = State::AWAKE;
 bool HVisOn = false;
-uint8_t START_HOUR = 8;
-uint8_t END_HOUR = 23;
+typedef struct {
+  uint8_t minute = 0;
+  uint8_t hour;
+} timePoint_t;
+timePoint_t START_TIME = {.hour = 8};
+timePoint_t END_TIME = {.hour = 23};
 
 uint8_t checksum_eeprom_cache() {
   // Add all bytes in cache % 256 and add 42, that is the checksum written to
@@ -79,13 +83,18 @@ bool read_stored_settings() {
     return false;
   }
 
-  averageTubeBrightness = EEPROM.read(EEPROM_MAIN_START_ADDR);
-  START_HOUR = EEPROM.read(EEPROM_MAIN_START_ADDR + 1);
-  END_HOUR = EEPROM.read(EEPROM_MAIN_START_ADDR + 2);
+  int16_t addr = EEPROM_MAIN_START_ADDR;
+
+  averageTubeBrightness = EEPROM.read(addr++);
+  START_TIME.hour = EEPROM.read(addr++);
+  START_TIME.minute = EEPROM.read(addr++);
+  END_TIME.hour = EEPROM.read(addr++);
+  END_TIME.minute = EEPROM.read(addr++);
 
   Serial.println("Settings correctly read from cache");
-  Serial.printf("Brightness: %d, START_HOUR: %d, END_HOUR%d.\n",
-                averageTubeBrightness, START_HOUR, END_HOUR);
+  Serial.printf("Brightness: %d, START_TIME: %d:%d, END_TIME: %d:%d.\n",
+                averageTubeBrightness, START_TIME.hour, START_TIME.minute,
+                END_TIME.hour, END_TIME.minute);
 
   return true;
 }
@@ -97,8 +106,10 @@ bool store_settings() {
 
   // write settings
   EEPROM.write(addr++, averageTubeBrightness);
-  EEPROM.write(addr++, START_HOUR);
-  EEPROM.write(addr++, END_HOUR);
+  EEPROM.write(addr++, START_TIME.hour);
+  EEPROM.write(addr++, START_TIME.minute);
+  EEPROM.write(addr++, END_TIME.hour);
+  EEPROM.write(addr++, END_TIME.minute);
 
   // fill up the rest of the cache (except last byte) with 0s
   for (; addr < EEPROM_MAIN_END_ADDR; addr++) {
@@ -394,68 +405,8 @@ const char web_server_html_header[] PROGMEM = R"=====(
 <link rel="stylesheet" type="text/css" href="style.css">
 <script>
 let data = %s;
-document.addEventListener("DOMContentLoaded", (event) => {
-  document.getElementById("currentMode").textContent = data.currentState;
-  document.getElementById("digit1").textContent = data.currentDigit1;
-  document.getElementById("digit2").textContent = data.currentDigit2;
-  document.getElementById("digit3").textContent = data.currentDigit3;
-  document.getElementById("digit4").textContent = data.currentDigit4;
-  document.getElementById("freeRAM").textContent = data.hFree;
-  document.getElementById("contiguousRAM").textContent = data.hMax;
-  document.getElementById("fragmentedRAM").textContent = data.hFrag;
-
-  const startTime = document.getElementById("start-time");
-  startTime.value = data.startHour.toString().padStart(2, "0") + ":00";
-  startTime.addEventListener("input", (event) => {
-    data.startHour = parseInt(event.target.value.substring(0,2));
-    fetch(`http://${data.hostname}/settings`, 
-      {method: "POST", 
-      body: new URLSearchParams({
-            'startHour': data.startHour
-            })
-      })
-  });
-
-  const endTime = document.getElementById("end-time");
-  endTime.value = data.endHour.toString().padStart(2, "0") + ":00";
-  endTime.addEventListener("input", (event) => {
-    data.endHour = parseInt(event.target.value.substring(0,2));
-    fetch(`http://${data.hostname}/settings`, 
-      {method: "POST", 
-      body: new URLSearchParams({
-            'endHour': data.endHour
-            })
-      })
-  });
-
-  const brightness = document.getElementById("brightness");
-  brightness.value = data.brightness.toString();
-  const brightnessValue = document.getElementById("brightness-value");
-  brightnessValue.textContent = brightness.value;
-  brightness.addEventListener("input", (event) => {
-    brightnessValue.textContent = event.target.value;
-    data.brightness = event.target.value;
-    fetch(`http://${data.hostname}/settings`, 
-      {method: "POST", 
-      body: new URLSearchParams({
-            'brightness': event.target.value
-            })
-      })
-  });
-
-  const hvToggle = document.getElementById("hvBtnToggle");
-  hvToggle.checked = data.isHVon? true: false;
-  hvToggle.addEventListener("input", (event) => {
-    data.isHVOn = event.target.checked;
-    fetch(`http://${data.hostname}/settings`, 
-      {method: "POST", 
-      body: new URLSearchParams({
-            'isHVOn': event.target.checked
-            })
-      })
-  });
-});
 </script>
+<script src="script.js"></script>
 <title>Nixie clock</title>
 </head>
 <body>
@@ -524,7 +475,9 @@ void setup_web_server() {
     brightness: %d,
     isHVon: %d,
     startHour: %d,
+    startMinute: %d,
     endHour: %d,
+    endMinute: %d,
     hFree: %d,
     hMax: %d,
     hFrag: %d
@@ -534,13 +487,16 @@ void setup_web_server() {
     snprintf(json_buffer, sizeof json_buffer, json_string, hostname,
              state_to_string[static_cast<int>(current_state)], currentDigit1,
              currentDigit2, currentDigit3, currentDigit4, getTubeBrightness(),
-             isHVOn(), START_HOUR, END_HOUR, hfree / 1024, hmax / 1024, hfrag);
+             isHVOn(), START_TIME.hour, START_TIME.minute, END_TIME.hour,
+             END_TIME.minute, hfree / 1024, hmax / 1024, hfrag);
 
     response->printf_P(web_server_html_header, json_buffer);
     request->send(response);
   });
 
   web_server.serveStatic("/style.css", LittleFS, "/style.css")
+      .setCacheControl("max-age=600");
+  web_server.serveStatic("/script.js", LittleFS, "/script.js")
       .setCacheControl("max-age=600");
 
   web_server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -562,16 +518,32 @@ void setup_web_server() {
     if (request->hasParam("startHour", true)) {
       AsyncWebParameter *p = request->getParam("startHour", true);
       const int readInt = p->value().toInt();
-      if (START_HOUR != readInt) {
-        START_HOUR = readInt;
+      if (START_TIME.hour != readInt) {
+        START_TIME.hour = readInt;
+        settingsChanged = true;
+      }
+    }
+    if (request->hasParam("startMinute", true)) {
+      AsyncWebParameter *p = request->getParam("startMinute", true);
+      const int readInt = p->value().toInt();
+      if (START_TIME.minute != readInt) {
+        START_TIME.minute = readInt;
         settingsChanged = true;
       }
     }
     if (request->hasParam("endHour", true)) {
       AsyncWebParameter *p = request->getParam("endHour", true);
       const int readInt = p->value().toInt();
-      if (END_HOUR != readInt) {
-        END_HOUR = readInt;
+      if (END_TIME.hour != readInt) {
+        END_TIME.hour = readInt;
+        settingsChanged = true;
+      }
+    }
+    if (request->hasParam("endMinute", true)) {
+      AsyncWebParameter *p = request->getParam("endMinute", true);
+      const int readInt = p->value().toInt();
+      if (END_TIME.minute != readInt) {
+        END_TIME.minute = readInt;
         settingsChanged = true;
       }
     }
@@ -591,14 +563,18 @@ void setup_web_server() {
         switchHVOff();
       }
     }
+
     if (settingsChanged) {
       // save settings to EEPROM
-      if (!store_settings()) {
+      if (store_settings()) {
+        request->send(200, F("text/plain"), F("Settings stored to EEPROM"));
+      } else {
         request->send(507, F("text/plain"),
                       F("Error storing settings to EEPROM"));
       }
+    } else {
+      request->send(200, F("text/plain"), F("Ok"));
     }
-    request->send(200, F("text/plain"), F("Ok"));
   });
 
   web_server.onNotFound([](AsyncWebServerRequest *request) {
@@ -672,7 +648,10 @@ void awake() {
     lastMinute = Amsterdam.minute();
   }
 
-  if (Amsterdam.hour() == END_HOUR) {
+  if (((Amsterdam.hour() < START_TIME.hour) |
+       (Amsterdam.hour() >= END_TIME.hour)) &
+      ((Amsterdam.minute() < START_TIME.minute) |
+       (Amsterdam.minute() >= END_TIME.minute))) {
     Serial.println("Powering down tubes for the night...");
     Serial.print("> ");
     powerDownTubesTimer.start();
@@ -687,7 +666,10 @@ void powering_down() {
 }
 
 void sleeping() {
-  if (Amsterdam.hour() == START_HOUR) {
+  if (((Amsterdam.hour() >= START_TIME.hour) |
+       (Amsterdam.hour() < END_TIME.hour)) &
+      ((Amsterdam.minute() >= START_TIME.minute) |
+       (Amsterdam.minute() < END_TIME.minute))) {
     Serial.println("Powering up tubes for the day...");
     Serial.print("> ");
     powerUpTubesTimer.start();
