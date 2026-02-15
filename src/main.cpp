@@ -90,7 +90,7 @@ bool read_stored_settings() {
   return true;
 }
 
-void store_settings() {
+bool store_settings() {
   EEPROM.begin(EEPROM_MAIN_SIZE);
 
   uint16_t addr = EEPROM_MAIN_START_ADDR;
@@ -111,8 +111,10 @@ void store_settings() {
 
   if (EEPROM.commit()) {
     Serial.println("EEPROM successfully committed");
+    return true;
   } else {
     Serial.println("ERROR! EEPROM commit failed");
+    return false;
   }
 }
 
@@ -591,7 +593,10 @@ void setup_web_server() {
     }
     if (settingsChanged) {
       // save settings to EEPROM
-      store_settings();
+      if (!store_settings()) {
+        request->send(507, F("text/plain"),
+                      F("Error storing settings to EEPROM"));
+      }
     }
     request->send(200, F("text/plain"), F("Ok"));
   });
