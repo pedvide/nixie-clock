@@ -580,7 +580,7 @@ void setup_web_server() {
       const int readInt = p->value().toInt();
       if (getTubeBrightness() != readInt) {
         setTubeBrightness(readInt);
-        settingsChanged = true;
+        // settingsChanged = true; // don't store brightness changes
       }
     }
     if (request->hasParam("isHVOn", true)) {
